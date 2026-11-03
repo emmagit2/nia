@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    font-family: "Inter", system-ui, sans-serif;
+    background-color: #0a0a0a;
+    color: #ffffff;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    min-height: 100svh;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: "Sora", "Inter", sans-serif;
+  }
+}
+
+@layer components {
+  .btn-gold {
+    @apply bg-[#FFD700] text-[#0A0A0A] font-semibold px-6 py-3 rounded-xl hover:bg-[#FFE44D] transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-outline-gold {
+    @apply border border-[#FFD700] text-[#FFD700] font-semibold px-6 py-3 rounded-xl hover:bg-[#FFD700] hover:text-[#0A0A0A] transition-all duration-200 active:scale-95;
+  }
+
+  .card-dark {
+    @apply bg-[#111111] border border-[#2E2E2E] rounded-2xl;
+  }
+
+  .input-dark {
+    @apply bg-[#1A1A1A] border border-[#2E2E2E] text-white placeholder-gray-500 rounded-xl px-4 py-3 w-full focus:outline-none focus:border-[#FFD700] transition-colors;
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      #1a1a1a 25%,
+      #242424 50%,
+      #1a1a1a 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Clerk overrides */
+.cl-rootBox,
+.cl-card {
+  background: #111111 !important;
+  border: 1px solid #2E2E2E !important;
+  border-radius: 16px !important;
+  color: white !important;
+}
+
+.cl-formButtonPrimary {
+  background: #FFD700 !important;
+  color: #0A0A0A !important;
+  font-weight: 600 !important;
+}
+
+.cl-formButtonPrimary:hover {
+  background: #FFE44D !important;
+}
+
+.cl-headerTitle,
+.cl-headerSubtitle {
+  color: white !important;
+}
+
+.cl-formFieldInput {
+  background: #1A1A1A !important;
+  border-color: #2E2E2E !important;
+  color: white !important;
+}
+
+.cl-footerActionLink {
+  color: #FFD700 !important;
+}
+
+.cl-dividerText {
+  color: #666 !important;
+}
+
+.cl-internal-wkkub3 {
+  color: white !important;
+}
