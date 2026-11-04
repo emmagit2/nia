@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -15,20 +14,33 @@ const ASPECT_RATIOS: Record<string, string> = {
   "Business Card": "ASPECT_16_9",
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
+export default async (req: Request) => {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return json({ error: "Method not allowed" }, 405);
   }
 
-  const { businessName, type, description, clerkId } = req.body as {
-    businessName: string;
-    type: string;
-    description: string;
-    clerkId: string;
+  let body: {
+    businessName?: string;
+    type?: string;
+    description?: string;
+    clerkId?: string;
   };
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const { businessName, type, description, clerkId } = body;
 
   if (!clerkId || !businessName) {
-    return res.status(400).json({ error: "Missing required fields" });
+    return json({ error: "Missing required fields" }, 400);
   }
 
   // Get user from Supabase
@@ -39,11 +51,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .maybeSingle();
 
   if (userError || !user) {
-    return res.status(404).json({ error: "User not found" });
+    return json({ error: "User not found" }, 404);
   }
 
   if (user.credits_left < 1) {
-    return res.status(402).json({ error: "No credits left" });
+    return json({ error: "No credits left" }, 402);
   }
 
   // Deduct credit immediately
@@ -53,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .eq("clerk_id", clerkId);
 
   if (deductError) {
-    return res.status(500).json({ error: "Failed to deduct credit" });
+    return json({ error: "Failed to deduct credit" }, 500);
   }
 
   try {
@@ -84,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error(`Ideogram API error: ${errText}`);
     }
 
-    const ideogramData = await ideogramRes.json() as {
+    const ideogramData = (await ideogramRes.json()) as {
       data: Array<{ url: string }>;
     };
 
@@ -101,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       credits_used: 1,
     });
 
-    return res.status(200).json({
+    return json({
       image_url: imageUrl,
       credits_left: user.credits_left - 1,
     });
@@ -113,6 +125,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .update({ credits_left: user.credits_left })
       .eq("clerk_id", clerkId);
 
-    return res.status(500).json({ error: "AI generation failed. Credit refunded." });
+    return json({ error: "AI generation failed. Credit refunded." }, 500);
   }
-}
+};

@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -15,24 +14,34 @@ const AMOUNT_TO_CREDITS: Record<number, { credits: number; plan: string | null }
   200000: { credits: 10, plan: null },
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
+export default async (req: Request) => {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return json({ error: "Method not allowed" }, 405);
   }
 
-  const { reference, clerk_id } = req.body as {
-    reference: string;
-    clerk_id: string;
-  };
+  let body: { reference?: string; clerk_id?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const { reference, clerk_id } = body;
 
   if (!reference || !clerk_id) {
-    return res.status(400).json({ error: "Missing reference or clerk_id" });
+    return json({ error: "Missing reference or clerk_id" }, 400);
   }
 
   try {
     // Verify with Paystack
     const paystackRes = await fetch(
-      `https://api.paystack.co/transaction/verify/${reference}`,
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
       {
         headers: {
           Authorization: `Bearer ${PAYSTACK_SECRET}`,
@@ -41,10 +50,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     if (!paystackRes.ok) {
-      return res.status(400).json({ error: "Payment verification failed" });
+      return json({ error: "Payment verification failed" }, 400);
     }
 
-    const paystackData = await paystackRes.json() as {
+    const paystackData = (await paystackRes.json()) as {
       status: boolean;
       data: {
         status: string;
@@ -54,14 +63,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     if (!paystackData.status || paystackData.data.status !== "success") {
-      return res.status(400).json({ error: "Payment not successful" });
+      return json({ error: "Payment not successful" }, 400);
     }
 
     const amount = paystackData.data.amount;
     const mapping = AMOUNT_TO_CREDITS[amount];
 
     if (!mapping) {
-      return res.status(400).json({ error: "Unknown payment amount" });
+      return json({ error: "Unknown payment amount" }, 400);
     }
 
     const { credits, plan } = mapping;
@@ -75,7 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .maybeSingle();
 
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      return json({ error: "User not found" }, 404);
     }
 
     const updatePayload: Record<string, unknown> = {
@@ -94,18 +103,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       updatePayload.paystack_customer_code = customerCode;
     }
 
-    await supabase
+    const { error: updateError } = await supabase
       .from("users")
       .update(updatePayload)
       .eq("clerk_id", clerk_id);
 
-    return res.status(200).json({
+    if (updateError) {
+      console.error("Update failed:", updateError.message);
+      return json({ error: "Failed to update credits" }, 500);
+    }
+
+    return json({
       success: true,
       credits_added: credits,
       plan: plan ?? "extra",
     });
   } catch (err) {
     console.error("Verify error:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return json({ error: "Internal server error" }, 500);
   }
-}
+};
