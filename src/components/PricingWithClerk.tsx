@@ -12,41 +12,44 @@ export default function PricingWithClerk() {
   const { refreshUser } = useUser();
   const navigate = useNavigate();
   const paystackKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
+const handlePay = (amount: number, planId: string, credits: number) => {
+  if (!isSignedIn) {
+    navigate("/auth");
+    return;
+  }
+  if (!clerkUser) return;
 
-  const handlePay = (amount: number, planId: string, credits: number) => {
-    if (!isSignedIn) {
-      navigate("/auth");
-      return;
+  const email =
+    clerkUser.emailAddresses?.[0]?.emailAddress ??
+    `${clerkUser.id}@ogadesigner.com`;
+
+  const verifyPayment = async (reference: string) => {
+    try {
+      await axios.post("/api/paystack/verify", {
+        reference,
+        clerk_id: clerkUser.id,
+      });
+      await refreshUser();
+      navigate("/dashboard");
+    } catch (err) {
+      console.error("Payment verify error:", err);
     }
-    if (!clerkUser) return;
-
-    const email =
-      clerkUser.emailAddresses?.[0]?.emailAddress ??
-      `${clerkUser.id}@ogadesigner.com`;
-
-    const handler = PaystackPop.setup({
-      key: paystackKey,
-      email,
-      amount,
-      currency: "NGN",
-      ref: `${planId}_${clerkUser.id}_${Date.now()}`,
-      metadata: { clerk_id: clerkUser.id, plan_id: planId, credits },
-      callback: async (response) => {
-        try {
-          await axios.post("/api/paystack/verify", {
-            reference: response.reference,
-            clerk_id: clerkUser.id,
-          });
-          await refreshUser();
-          navigate("/dashboard");
-        } catch (err) {
-          console.error("Payment verify error:", err);
-        }
-      },
-      onClose: () => {},
-    });
-    handler.openIframe();
   };
+
+  const handler = (window as any).PaystackPop.setup({
+    key: paystackKey,
+    email,
+    amount,
+    currency: "NGN",
+    ref: `${planId}_${clerkUser.id}_${Date.now()}`,
+    metadata: { clerk_id: clerkUser.id, plan_id: planId, credits },
+    callback: function (response: { reference: string }) {
+      verifyPayment(response.reference); // async work happens inside, callback itself is not async
+    },
+    onClose: function () {},
+  });
+  handler.openIframe();
+};
 
   return (
     <>
