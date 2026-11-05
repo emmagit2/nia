@@ -1,5 +1,37 @@
 import type { Context } from "@netlify/functions";
-import { supabase, json, clean, readBody, hashIp, lastSegment } from "./lib/leads";
+import { createClient } from "@supabase/supabase-js";
+import crypto from "node:crypto";
+
+/* ---- helpers (kept in this file so no shared folder is needed) ---- */
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+const clean = (v: unknown, max: number) =>
+  typeof v === "string" ? v.replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, max) : "";
+
+const hashIp = (ip: string) =>
+  crypto.createHash("sha256").update(`${process.env.CLERK_SECRET_KEY}:${ip}`).digest("hex").slice(0, 32);
+
+/** Last piece of the URL path, e.g. /api/leads/abc123 -> abc123 */
+const lastSegment = (req: Request) => {
+  const parts = new URL(req.url).pathname.split("/").filter(Boolean);
+  return decodeURIComponent(parts[parts.length - 1] || "");
+};
+
+/** Reads a small JSON body. Returns null if it is too big or not JSON. */
+async function readBody(req: Request, max = 20000): Promise<Record<string, any> | null> {
+  try {
+    const text = await req.text();
+    if (text.length > max) return null;
+    const data = JSON.parse(text || "{}");
+    return data && typeof data === "object" ? data : null;
+  } catch {
+    return null;
+  }
+}
+/* ---- end helpers ---- */
 
 // Public, no login:
 //   GET  /api/public/campaign/:slug  -> what the customer sees after scanning the QR

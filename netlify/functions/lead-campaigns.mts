@@ -1,4 +1,45 @@
-import { supabase, json, clean, makeSlug, readBody, getUserId } from "./lib/leads";
+import { createClient } from "@supabase/supabase-js";
+import { verifyToken } from "@clerk/backend";
+import crypto from "node:crypto";
+
+/* ---- helpers (kept in this file so no shared folder is needed) ---- */
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+const clean = (v: unknown, max: number) =>
+  typeof v === "string" ? v.replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, max) : "";
+
+const makeSlug = () =>
+  crypto.randomBytes(6).toString("base64url").replace(/[-_]/g, "x").slice(0, 8).toLowerCase();
+
+/** Reads a small JSON body. Returns null if it is too big or not JSON. */
+async function readBody(req: Request, max = 20000): Promise<Record<string, any> | null> {
+  try {
+    const text = await req.text();
+    if (text.length > max) return null;
+    const data = JSON.parse(text || "{}");
+    return data && typeof data === "object" ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Signed-in Clerk user id from the Bearer token, or null. Never trust an id sent in the body. */
+async function getUserId(req: Request): Promise<string | null> {
+  try {
+    const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+    if (!token) return null;
+    const r: any = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY! });
+    if (r?.errors?.length) return null; // newer Clerk versions return { data, errors }
+    const payload = r?.data ?? r;
+    return typeof payload?.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+/* ---- end helpers ---- */
 
 const MAX_CAMPAIGNS = 20;
 
