@@ -53,6 +53,9 @@ const STYLES = `
 .lp-head h2{ font-size:clamp(1.85rem,4.4vw,2.7rem); margin-bottom:12px; }
 .lp-head p{ color:var(--muted); font-size:1.05rem; }
 .lp-svg{ display:block; width:100%; height:100%; }
+/* Single-column grids must be allowed to shrink below their content, or wide children push the page past the phone screen */
+.lp-hero-grid,.lp-split,.lp-steps,.lp-tools,.lp-perks,.lp-quotes,.lp-quote-side,.lp-band,.lp-result{ grid-template-columns:minmax(0,1fr); }
+.lp-hero-grid > *,.lp-split > *,.lp-quotes > *,.lp-band > *{ min-width:0; }
 
 /* Header */
 .lp-header{ position:sticky; top:0; z-index:50; background:rgba(255,255,255,.95); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); }
@@ -107,9 +110,8 @@ const STYLES = `
 
 /* Prompt to design demo */
 .lp-stage{ background:var(--green-900); color:#fff; border-radius:20px; padding:14px; max-width:600px; width:100%; }
-.lp-tabs{ display:flex; gap:6px; overflow-x:auto; margin-bottom:12px; scrollbar-width:none; }
-.lp-tabs::-webkit-scrollbar{ display:none; }
-.lp-tab{ flex:none; min-height:40px; padding:0 14px; border-radius:8px; font-size:.9rem; font-weight:600; white-space:nowrap; color:rgba(255,255,255,.8); border:1px solid rgba(255,255,255,.24); transition:background-color .15s,color .15s,border-color .15s; }
+.lp-tabs{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:12px; }
+.lp-tab{ min-height:44px; padding:0 10px; border-radius:8px; font-size:.9rem; font-weight:600; white-space:nowrap; color:rgba(255,255,255,.8); border:1px solid rgba(255,255,255,.24); transition:background-color .15s,color .15s,border-color .15s; }
 .lp-tab:hover{ color:#fff; border-color:rgba(255,255,255,.55); }
 .lp-tab[aria-pressed="true"]{ background:var(--gold); border-color:var(--gold); color:var(--green-950); }
 .lp-prompt{ background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.16); border-radius:12px; padding:14px 16px; margin-bottom:12px; min-height:7.75rem; }
@@ -121,6 +123,8 @@ const STYLES = `
 .lp-meta dt{ font-size:.8rem; color:rgba(255,255,255,.62); }
 .lp-meta dd{ font-weight:600; font-size:.95rem; }
 @media (min-width:560px){
+  .lp-tabs{ display:flex; flex-wrap:wrap; gap:6px; }
+  .lp-tab{ padding:0 14px; min-height:40px; }
   .lp-stage{ padding:22px; }
   .lp-prompt{ min-height:6.5rem; }
   .lp-result{ grid-template-columns:minmax(0,1fr) 150px; align-items:end; gap:20px; }
