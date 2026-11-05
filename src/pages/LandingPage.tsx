@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
-  Pause,
-  Play,
+  Menu,
+  X,
+  Check,
+  Clock,
   Store,
   PenTool,
   GraduationCap,
@@ -17,119 +16,199 @@ import {
   ScanText,
   FilePen,
   Zap,
-  Clock,
   Shield,
   Star,
-  Check,
 } from "lucide-react";
 
 /* -------------------------------------------------------------------------- */
-/*  Styles (scoped, so they do not clash with your dark global classes)        */
+/*  Styles. Scoped under .lp and independent of Tailwind, so the layout and    */
+/*  breakpoints work the same whatever your global config looks like.          */
 /* -------------------------------------------------------------------------- */
 
 const STYLES = `
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400;500;600;700&display=swap');
+
 .lp{
-  --g-950:#06241A; --g-900:#0A2E1E; --g-700:#0B6B3F; --g-600:#0E8A50; --g-500:#16A35F;
-  --g-100:#E1F3E8; --g-50:#F3FAF6; --y:#FFC93C; --y-soft:#FFF3CC;
-  --ink:#0F1F17; --muted:#4A5E53; --line:#DBE8E0;
-  background:#fff; color:var(--ink); min-height:100vh; overflow-x:hidden;
+  --green-950:#082A1C; --green-900:#0C3B28; --green-700:#12603F; --green-600:#177A50;
+  --gold:#FFC72C; --gold-soft:#FFF1C2;
+  --ink:#14201A; --muted:#55645B; --line:#DDE3DE; --wash:#F4F6F3;
+  --display:'Bricolage Grotesque','Figtree',system-ui,sans-serif;
+  --body:'Figtree',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-family:var(--body); color:var(--ink); background:#fff; min-height:100vh;
+  line-height:1.55; overflow-x:hidden; -webkit-font-smoothing:antialiased;
 }
-.lp h1,.lp h2,.lp h3{ color:var(--g-950); letter-spacing:-0.02em; }
-.lp-muted{ color:var(--muted); }
-.lp-wrap{ max-width:1160px; margin-left:auto; margin-right:auto; padding-left:1rem; padding-right:1rem; }
-.lp-hero{ position:relative; overflow:hidden; }
-.lp-hero-inner{ padding-top:clamp(2.75rem,7vw,5.5rem); padding-bottom:clamp(3rem,7vw,6rem); }
+.lp *,.lp *::before,.lp *::after{ box-sizing:border-box; }
+.lp :where(h1,h2,h3,p,ul,ol,figure,blockquote,dl,dd){ margin:0; padding:0; }
+.lp :where(ul,ol){ list-style:none; }
+.lp :where(a){ color:inherit; text-decoration:none; }
+.lp :where(button){ font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; }
+.lp :where(h1,h2,h3){ font-family:var(--display); color:var(--green-950); font-weight:700; letter-spacing:-.025em; line-height:1.1; }
+.lp :focus-visible{ outline:2px solid var(--green-700); outline-offset:3px; border-radius:6px; }
+.lp-dark :focus-visible{ outline-color:var(--gold); }
+
+.lp-wrap{ max-width:1160px; margin:0 auto; padding:0 20px; }
+.lp-section{ padding:72px 0; scroll-margin-top:64px; }
+.lp-wash{ background:var(--wash); }
+.lp-head{ max-width:40rem; margin-bottom:40px; }
+.lp-head h2{ font-size:clamp(1.85rem,4.4vw,2.7rem); margin-bottom:12px; }
+.lp-head p{ color:var(--muted); font-size:1.05rem; }
+.lp-svg{ display:block; width:100%; height:100%; }
 
 /* Header */
-.lp-header{ position:sticky; top:0; z-index:50; background:rgba(255,255,255,.86); backdrop-filter:blur(14px); border-bottom:1px solid var(--line); }
-.lp-link{ color:var(--muted); font-size:.92rem; font-weight:500; padding:.4rem .2rem; }
-.lp-link:hover{ color:var(--g-700); }
-.lp-logo{ width:34px; height:34px; border-radius:11px; background:linear-gradient(160deg,var(--g-500),var(--g-700)); display:grid; place-items:center; color:#fff; font-weight:800; position:relative; }
-.lp-logo::after{ content:""; position:absolute; right:-3px; top:-3px; width:10px; height:10px; border-radius:99px; background:var(--y); border:2px solid #fff; }
+.lp-header{ position:sticky; top:0; z-index:50; background:rgba(255,255,255,.95); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); }
+.lp-header-row{ height:64px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.lp-brand{ display:flex; align-items:center; gap:10px; font-family:var(--display); font-weight:700; font-size:1.15rem; letter-spacing:-.02em; color:var(--green-950); }
+.lp-mark{ width:32px; height:32px; border-radius:8px; background:var(--green-900); color:var(--gold); display:grid; place-items:center; font-weight:800; font-size:1.05rem; }
+.lp-nav{ display:none; gap:30px; }
+.lp-nav a{ font-size:.95rem; font-weight:500; color:var(--muted); padding:6px 0; }
+.lp-nav a:hover{ color:var(--green-700); }
+.lp-actions{ display:flex; align-items:center; gap:10px; }
+.lp-signin{ display:none; font-size:.95rem; font-weight:500; color:var(--muted); padding:0 8px; }
+.lp-signin:hover{ color:var(--green-700); }
+.lp-menu-btn{ width:40px; height:40px; display:grid; place-items:center; border:1px solid var(--line); border-radius:8px; }
+.lp-drawer{ border-top:1px solid var(--line); background:#fff; padding:4px 20px 16px; }
+.lp-drawer a{ display:block; padding:14px 0; border-bottom:1px solid var(--line); font-weight:500; }
+.lp-drawer a:last-child{ border-bottom:0; }
+@media (min-width:900px){
+  .lp-nav{ display:flex; } .lp-signin{ display:block; }
+  .lp-menu-btn,.lp-drawer{ display:none; }
+}
 
 /* Buttons */
-.lp-btn{ display:inline-flex; align-items:center; justify-content:center; gap:.6rem; padding:.85rem 1.35rem; border-radius:14px; font-weight:700; font-size:.95rem; color:#fff;
-  background:linear-gradient(180deg,var(--g-500),var(--g-700)); box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 12px 24px -12px rgba(11,107,63,.75);
-  transition:transform .15s, box-shadow .2s, filter .2s; }
-.lp-btn:hover{ transform:translateY(-2px); filter:brightness(1.05); box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 16px 28px -12px rgba(11,107,63,.85); }
-.lp-btn:active{ transform:translateY(1px); }
-.lp-btn-ico{ display:grid; place-items:center; width:26px; height:26px; border-radius:9px; background:rgba(255,255,255,.18); transition:transform .2s; }
-.lp-btn:hover .lp-btn-ico{ transform:translateX(3px); }
-.lp-btn-ghost{ display:inline-flex; align-items:center; justify-content:center; gap:.5rem; padding:.85rem 1.35rem; border-radius:14px; font-weight:600; font-size:.95rem; color:var(--g-700); background:#fff; border:1.5px solid var(--line); transition:transform .15s, border-color .2s, background-color .2s; }
-.lp-btn-ghost:hover{ border-color:var(--g-500); background:var(--g-50); transform:translateY(-2px); }
-.lp-btn-sm{ padding:.55rem 1rem; font-size:.85rem; border-radius:12px; }
-.lp-btn-yellow{ display:inline-flex; align-items:center; justify-content:center; gap:.6rem; padding:.9rem 1.5rem; border-radius:14px; font-weight:800; font-size:.95rem; color:var(--g-950); background:var(--y); box-shadow:0 12px 24px -12px rgba(255,201,60,.9); transition:transform .15s, filter .2s; }
-.lp-btn-yellow:hover{ transform:translateY(-2px); filter:brightness(1.04); }
-.lp a:focus-visible,.lp button:focus-visible{ outline:3px solid var(--y); outline-offset:2px; border-radius:12px; }
+.lp-btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:0 22px; border-radius:10px; font-weight:600; font-size:.98rem; background:var(--green-900); color:#fff; border:1px solid var(--green-900); transition:background-color .15s,border-color .15s; }
+.lp-btn:hover{ background:var(--green-700); border-color:var(--green-700); }
+.lp-btn-line{ background:transparent; color:var(--green-900); border-color:#B9C5BE; }
+.lp-btn-line:hover{ background:var(--wash); border-color:var(--green-900); }
+.lp-btn-gold{ background:var(--gold); color:var(--green-950); border-color:var(--gold); }
+.lp-btn-gold:hover{ background:#FFD35A; border-color:#FFD35A; }
+.lp-btn-outline-light{ background:transparent; color:#fff; border-color:rgba(255,255,255,.4); }
+.lp-btn-outline-light:hover{ background:rgba(255,255,255,.1); border-color:#fff; }
+.lp-btn-sm{ min-height:40px; padding:0 16px; font-size:.9rem; }
 
 /* Hero */
-.lp-hero-bg{ position:absolute; inset:0; pointer-events:none;
-  background:radial-gradient(50% 60% at 85% 10%,rgba(22,163,95,.16),transparent 70%), radial-gradient(40% 40% at 0% 100%,rgba(255,201,60,.14),transparent 70%); }
-.lp-pill{ display:inline-flex; align-items:center; gap:.55rem; padding:.4rem .9rem .4rem .5rem; border-radius:99px; background:var(--g-50); border:1px solid var(--line); color:var(--g-700); font-size:.82rem; font-weight:600; }
-.lp-pill i{ width:22px; height:22px; border-radius:99px; background:var(--y); display:grid; place-items:center; color:var(--g-950); }
-.lp-point{ display:flex; align-items:center; gap:.5rem; font-size:.88rem; color:var(--muted); }
-.lp-point b{ width:20px; height:20px; border-radius:99px; background:var(--g-100); color:var(--g-700); display:grid; place-items:center; }
+.lp-hero{ padding:36px 0 64px; }
+.lp-hero-grid{ display:grid; gap:40px; align-items:center; }
+.lp-h1{ font-size:clamp(2.35rem,9vw,3.7rem); line-height:1.02; letter-spacing:-.035em; margin-bottom:20px; }
+.lp-lead{ font-size:1.1rem; color:var(--muted); max-width:30em; margin-bottom:28px; }
+.lp-cta{ display:flex; flex-direction:column; gap:12px; margin-bottom:28px; }
+.lp-facts{ display:flex; flex-wrap:wrap; gap:10px 22px; font-size:.92rem; color:var(--muted); }
+.lp-facts li{ display:flex; align-items:center; gap:8px; }
+.lp-facts svg{ color:var(--green-600); flex:none; }
+.lp-copy > *{ animation:lp-rise .7s cubic-bezier(.2,.7,.2,1) both; }
+.lp-copy > :nth-child(2){ animation-delay:.08s; } .lp-copy > :nth-child(3){ animation-delay:.16s; } .lp-copy > :nth-child(4){ animation-delay:.24s; }
+.lp-stage{ animation:lp-rise .8s .2s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes lp-rise{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
+@keyframes lp-swap{ from{ opacity:0; transform:scale(.97); } to{ opacity:1; transform:none; } }
+@media (min-width:560px){ .lp-cta{ flex-direction:row; } }
+@media (min-width:1000px){
+  .lp-hero{ padding:72px 0 96px; }
+  .lp-hero-grid{ grid-template-columns:1fr 1.02fr; gap:64px; }
+}
 
-/* Carousel */
-.lp-car{ position:relative; }
-.lp-car-frame{ overflow:hidden; border-radius:28px; background:#fff; border:1px solid var(--line); box-shadow:0 40px 70px -40px rgba(10,46,30,.45); }
-.lp-track{ display:flex; transition:transform .6s cubic-bezier(.3,.7,.2,1); }
-.lp-slide{ min-width:100%; }
-.lp-sticker{ position:absolute; top:-14px; right:-10px; z-index:2; transform:rotate(8deg); background:var(--y); color:var(--g-950); font-weight:800; font-size:.8rem; padding:.55rem .8rem; border-radius:14px; box-shadow:0 10px 20px -10px rgba(0,0,0,.35); line-height:1.1; text-align:center; }
-.lp-dot{ height:8px; width:8px; border-radius:99px; background:var(--line); transition:width .3s, background-color .3s; }
-.lp-dot[aria-current="true"]{ width:26px; background:var(--g-600); }
-.lp-icon-btn{ width:38px; height:38px; border-radius:12px; display:grid; place-items:center; background:#fff; border:1.5px solid var(--line); color:var(--g-700); transition:border-color .2s, background-color .2s; }
-.lp-icon-btn:hover{ border-color:var(--g-500); background:var(--g-50); }
+/* Prompt to design demo */
+.lp-stage{ background:var(--green-900); color:#fff; border-radius:20px; padding:14px; max-width:600px; width:100%; }
+.lp-tabs{ display:flex; gap:6px; overflow-x:auto; margin-bottom:12px; scrollbar-width:none; }
+.lp-tabs::-webkit-scrollbar{ display:none; }
+.lp-tab{ flex:none; min-height:40px; padding:0 14px; border-radius:8px; font-size:.9rem; font-weight:600; white-space:nowrap; color:rgba(255,255,255,.8); border:1px solid rgba(255,255,255,.24); transition:background-color .15s,color .15s,border-color .15s; }
+.lp-tab:hover{ color:#fff; border-color:rgba(255,255,255,.55); }
+.lp-tab[aria-pressed="true"]{ background:var(--gold); border-color:var(--gold); color:var(--green-950); }
+.lp-prompt{ background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.16); border-radius:12px; padding:14px 16px; margin-bottom:12px; min-height:7.75rem; }
+.lp-prompt small{ display:block; font-size:.82rem; color:rgba(255,255,255,.62); margin-bottom:4px; }
+.lp-prompt p{ line-height:1.5; }
+.lp-result{ display:grid; gap:14px; }
+.lp-art{ aspect-ratio:1; border-radius:12px; overflow:hidden; background:#fff; animation:lp-swap .35s ease-out; }
+.lp-meta{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.lp-meta dt{ font-size:.8rem; color:rgba(255,255,255,.62); }
+.lp-meta dd{ font-weight:600; font-size:.95rem; }
+@media (min-width:560px){
+  .lp-stage{ padding:22px; }
+  .lp-prompt{ min-height:6.5rem; }
+  .lp-result{ grid-template-columns:minmax(0,1fr) 150px; align-items:end; gap:20px; }
+  .lp-meta{ grid-template-columns:1fr; gap:16px; }
+}
 
-/* Marquee */
-.lp-marquee-mask{ overflow:hidden; -webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent); mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent); }
-.lp-marquee{ display:flex; gap:16px; width:max-content; animation:lp-scroll 46s linear infinite; }
-.lp-marquee:hover{ animation-play-state:paused; }
-@keyframes lp-scroll{ to{ transform:translateX(calc(-50% - 8px)); } }
-.lp-tcard{ width:190px; flex-shrink:0; border-radius:20px; overflow:hidden; background:#fff; border:1px solid var(--line); box-shadow:0 18px 30px -24px rgba(10,46,30,.5); }
+/* Gallery */
+.lp-gallery{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px 14px; }
+.lp-shot-art{ aspect-ratio:1; border-radius:12px; overflow:hidden; border:1px solid var(--line); }
+.lp-shot figcaption{ margin-top:10px; display:flex; flex-direction:column; }
+.lp-shot b{ font-weight:600; font-size:.95rem; line-height:1.3; }
+.lp-shot span{ font-size:.85rem; color:var(--muted); }
+@media (min-width:900px){
+  .lp-gallery{ grid-template-columns:repeat(4,minmax(0,1fr)); gap:32px 22px; padding-bottom:32px; }
+  .lp-shot:nth-child(even){ transform:translateY(32px); }
+}
 
-/* Cards */
-.lp-card{ background:#fff; border:1px solid var(--line); border-radius:24px; transition:transform .2s, border-color .2s, box-shadow .2s; }
-.lp-card-hover:hover{ transform:translateY(-4px); border-color:var(--g-500); box-shadow:0 26px 40px -30px rgba(11,107,63,.55); }
-.lp-tile{ width:48px; height:48px; border-radius:16px; display:grid; place-items:center; background:var(--g-100); color:var(--g-700); }
-.lp-tile-y{ background:var(--y-soft); color:#8A6400; }
-.lp-soft{ background:var(--g-50); }
-.lp-band{ background:linear-gradient(160deg,var(--g-900),var(--g-700)); color:#fff; position:relative; overflow:hidden; border-radius:32px; }
-.lp-band h2{ color:#fff; }
-.lp-step{ width:34px; height:34px; border-radius:99px; background:var(--g-600); color:#fff; display:grid; place-items:center; font-weight:800; font-size:.9rem; }
-.lp-time{ display:inline-flex; align-items:center; gap:.35rem; padding:.2rem .6rem; border-radius:99px; background:var(--y-soft); color:#7A5700; font-size:.75rem; font-weight:700; }
+/* Audiences */
+.lp-split{ display:grid; gap:8px; }
+.lp-rows li{ display:flex; gap:16px; padding:24px 0; border-top:1px solid var(--line); }
+.lp-rows li:last-child{ border-bottom:1px solid var(--line); }
+.lp-rows svg{ flex:none; margin-top:4px; color:var(--green-600); }
+.lp-rows h3{ font-size:1.25rem; margin-bottom:6px; }
+.lp-rows p{ color:var(--muted); max-width:34em; }
+@media (min-width:900px){
+  .lp-split{ grid-template-columns:1fr 1.5fr; gap:80px; }
+  .lp-split .lp-head{ position:sticky; top:104px; align-self:start; margin-bottom:0; }
+}
 
-/* Motion */
-.lp-rise{ animation:lp-rise .85s cubic-bezier(.2,.7,.2,1) both; animation-delay:var(--d,0s); }
-.lp-reveal{ opacity:0; }
-.lp-reveal.lp-in{ opacity:1; animation:lp-rise .75s cubic-bezier(.2,.7,.2,1) backwards; animation-delay:var(--d,0s); }
-@keyframes lp-rise{ from{ opacity:0; transform:translateY(22px); } to{ opacity:1; } }
-@keyframes lp-pop{ from{ opacity:0; transform:scale(.85) translateY(6px); } to{ opacity:1; } }
-.lp-float{ animation:lp-float 5s ease-in-out infinite; }
-@keyframes lp-float{ 0%,100%{ transform:translateY(0) rotate(8deg); } 50%{ transform:translateY(-9px) rotate(8deg); } }
-.lp-bob{ animation:lp-bob 4.5s ease-in-out infinite; }
-@keyframes lp-bob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-8px); } }
-.lp-orb{ position:absolute; border-radius:999px; filter:blur(55px); pointer-events:none; animation:lp-drift 14s ease-in-out infinite; }
-@keyframes lp-drift{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(30px,-26px) scale(1.12); } }
-.lp-art{ width:100%; height:100%; }
-.lp-slide[data-active="true"] .lp-art{ animation:lp-zoom 6s ease-out both; }
-.lp-slide[data-active="true"] .lp-cap{ animation:lp-rise .6s .2s cubic-bezier(.2,.7,.2,1) both; }
-@keyframes lp-zoom{ from{ transform:scale(1.12); } to{ transform:scale(1); } }
-.lp-prog{ height:4px; border-radius:99px; background:var(--g-100); overflow:hidden; margin-top:16px; }
-.lp-prog i{ display:block; height:100%; width:0; background:linear-gradient(90deg,var(--g-500),var(--y)); animation:lp-fill 4.5s linear forwards; }
-@keyframes lp-fill{ from{ width:0; } to{ width:100%; } }
-.lp-chip{ position:absolute; left:-16px; bottom:96px; z-index:2; }
-.lp-chip span{ display:flex; align-items:center; gap:.45rem; background:#fff; border:1px solid var(--line); border-radius:14px; padding:.5rem .8rem; font-size:.78rem; font-weight:700; color:var(--g-700); box-shadow:0 14px 26px -14px rgba(10,46,30,.5); animation:lp-pop .5s cubic-bezier(.2,.7,.2,1) both; }
-.lp-chip i{ width:18px; height:18px; border-radius:99px; background:var(--y); color:var(--g-950); display:grid; place-items:center; }
-@media (max-width:640px){ .lp-chip{ left:8px; bottom:92px; } }
-.lp-btn,.lp-btn-yellow{ position:relative; overflow:hidden; }
-.lp-btn::after{ content:""; position:absolute; inset:0; background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.38) 50%,transparent 70%); transform:translateX(-130%); animation:lp-shine 5s ease-in-out infinite; pointer-events:none; }
-@keyframes lp-shine{ 0%,55%{ transform:translateX(-130%); } 100%{ transform:translateX(130%); } }
+/* Steps */
+.lp-steps{ display:grid; gap:32px; }
+.lp-steps li{ border-top:2px solid var(--green-900); padding-top:20px; }
+.lp-step-top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.lp-step-n{ font-family:var(--display); font-size:2.6rem; font-weight:700; line-height:1; color:var(--green-700); }
+.lp-time{ display:inline-flex; align-items:center; gap:6px; font-size:.85rem; font-weight:600; color:var(--muted); }
+.lp-steps h3{ font-size:1.25rem; margin-bottom:8px; }
+.lp-steps p{ color:var(--muted); }
+@media (min-width:800px){ .lp-steps{ grid-template-columns:repeat(3,1fr); gap:40px; } }
 
+/* Tools */
+.lp-tools{ display:grid; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+.lp-tool{ background:#fff; padding:24px; display:flex; gap:14px; }
+.lp-tool svg{ flex:none; margin-top:3px; color:var(--green-700); }
+.lp-tool h3{ font-size:1.05rem; margin-bottom:4px; }
+.lp-tool p{ color:var(--muted); font-size:.95rem; }
+.lp-perks{ display:grid; gap:22px; margin-top:40px; }
+.lp-perks li{ display:flex; gap:12px; }
+.lp-perks svg{ flex:none; margin-top:3px; color:var(--green-700); }
+.lp-perks b{ display:block; font-weight:600; }
+.lp-perks span{ color:var(--muted); font-size:.95rem; }
+@media (min-width:620px){ .lp-tools{ grid-template-columns:repeat(2,1fr); } }
+@media (min-width:960px){ .lp-tools{ grid-template-columns:repeat(3,1fr); } }
+@media (min-width:720px){ .lp-perks{ grid-template-columns:repeat(3,1fr); gap:32px; } }
+
+/* Quotes */
+.lp-quotes{ display:grid; gap:40px; }
+.lp-quote-main::before{ content:""; display:block; width:40px; height:4px; background:var(--gold); margin-bottom:22px; }
+.lp-quote-main blockquote{ font-family:var(--display); font-size:clamp(1.35rem,3.2vw,1.95rem); line-height:1.3; letter-spacing:-.015em; font-weight:600; color:var(--green-950); margin-bottom:20px; }
+.lp-quote-side{ display:grid; gap:32px; align-content:start; }
+.lp-quote-side figure{ border-left:3px solid var(--gold); padding-left:18px; }
+.lp-quote-side blockquote{ margin-bottom:12px; }
+.lp-who b{ display:block; font-weight:600; }
+.lp-who span{ font-size:.9rem; color:var(--muted); }
+@media (min-width:900px){ .lp-quotes{ grid-template-columns:1.3fr 1fr; gap:72px; } }
+
+/* CTA + footer */
+.lp-band{ background:var(--green-900); color:#fff; border-radius:20px; padding:40px 24px; display:grid; gap:28px; }
+.lp-band h2{ color:#fff; font-size:clamp(1.8rem,4.2vw,2.6rem); margin-bottom:10px; }
+.lp-band p{ color:rgba(255,255,255,.8); font-size:1.05rem; }
+.lp-band-btns{ display:flex; flex-direction:column; gap:12px; }
+@media (min-width:800px){
+  .lp-band{ padding:56px; grid-template-columns:1.4fr 1fr; align-items:center; }
+  .lp-band-btns{ max-width:320px; justify-self:end; width:100%; }
+}
+.lp-footer{ border-top:1px solid var(--line); }
+.lp-footer-row{ padding:28px 0; display:flex; flex-direction:column; align-items:flex-start; gap:14px; font-size:.9rem; color:var(--muted); }
+.lp-footer-links{ display:flex; gap:20px; }
+.lp-footer-links a:hover{ color:var(--green-700); }
+@media (min-width:760px){ .lp-footer-row{ flex-direction:row; align-items:center; justify-content:space-between; } }
+
+@media (min-width:768px){
+  .lp-wrap{ padding:0 32px; }
+  .lp-section{ padding:96px 0; }
+  .lp-head{ margin-bottom:48px; }
+}
 @media (prefers-reduced-motion:reduce){
-  .lp-rise,.lp-reveal.lp-in,.lp-float,.lp-bob,.lp-orb,.lp-art,.lp-cap,.lp-btn::after,.lp-chip span{ animation:none !important; }
-  .lp-reveal{ opacity:1; }
-  .lp-track,.lp-btn,.lp-btn-ghost,.lp-card{ transition:none; }
+  .lp-copy > *,.lp-stage,.lp-art{ animation:none !important; }
+  .lp *{ transition:none !important; }
 }
 `;
 
@@ -163,8 +242,8 @@ const SAMPLES: Sample[] = [
 
 function SampleArt({ s }: { s: Sample }) {
   const { bg, fg, ac } = s.pal;
-  if (s.image) return <img src={s.image} alt={s.title} className="w-full h-full object-cover" />;
-  const svg = { viewBox: "0 0 200 200", className: "w-full h-full block", role: "img", "aria-label": s.title } as const;
+  if (s.image) return <img src={s.image} alt={s.title} className="lp-svg" style={{ objectFit: "cover" }} />;
+  const svg = { viewBox: "0 0 200 200", className: "lp-svg", role: "img", "aria-label": s.title } as const;
   const font = "system-ui, -apple-system, Segoe UI, sans-serif";
 
   switch (s.type) {
@@ -233,11 +312,11 @@ function SampleArt({ s }: { s: Sample }) {
 
 const byId = (id: string) => SAMPLES.find((s) => s.id === id)!;
 
-const SLIDES = [
-  { who: "Small businesses", line: "A shop flyer in the time it takes to boil water.", sample: byId("flyer-barber") },
-  { who: "Graphic designers", line: "First drafts for clients, ready before the call.", sample: byId("logo-tech") },
-  { who: "Students", line: "Posters for your society event, without Canva stress.", sample: byId("social-campus") },
-  { who: "Social creators", line: "Fresh post designs every week, same sharp look.", sample: byId("social-night") },
+const DEMO = [
+  { label: "Flyer", sample: byId("flyer-barber"), prompt: "Grand opening flyer for Fresh Cuts barbershop. Saturday, 10am. Dark green and gold." },
+  { label: "Logo", sample: byId("logo-tech"), prompt: "Logo for Nexa, a software startup. Simple, navy blue with a yellow accent." },
+  { label: "Social post", sample: byId("social-campus"), prompt: "Instagram post for the Unilag Tech Club campus fest. Bright green, bold text." },
+  { label: "Business card", sample: byId("card-eng"), prompt: "Business card for A. Bello, civil engineer. Dark green, clean and professional." },
 ];
 
 const AUDIENCES = [
@@ -249,7 +328,7 @@ const AUDIENCES = [
 
 const STEPS = [
   { title: "Describe your idea", time: "About 30 seconds", desc: "Type your business name, pick a design type and say the style you want. Or start from a template." },
-  { title: "AI designs it", time: "About 1 minute", desc: "TwoMinDesign turns your description into a finished design while you wait." },
+  { title: "The AI designs it", time: "About 1 minute", desc: "TwoMinDesign turns your description into a finished design while you wait." },
   { title: "Download and post", time: "Instant", desc: "Save it as an image and use it on WhatsApp, Instagram, print or anywhere else." },
 ];
 
@@ -262,129 +341,67 @@ const TOOLS = [
   { icon: FilePen, title: "Document Editor", desc: "Edit the text, then save as TXT or Word." },
 ];
 
-const TESTIMONIALS = [
-  { name: "Emeka O.", role: "Barbershop Owner, Lagos", text: "TwoMinDesign help me create my shop logo in one minute. E come out sharp! My customers don dey ask who design am." },
-  { name: "Tunde A.", role: "Fashion Designer, Abuja", text: "I use am for my Instagram promo flyers. The AI understand Lagos style. Na serious tool be this." },
-  { name: "Chidi N.", role: "Restaurant Owner, PH", text: "The Hustler plan worth every kobo. 70 credits last me well well for the month." },
+const PERKS = [
+  { icon: Zap, t: "One credit, one design", d: "Simple pricing. No subscriptions you forget about." },
+  { icon: Shield, t: "Secure Paystack payment", d: "Pay by card, bank transfer or USSD." },
+  { icon: Star, t: "Print-ready quality", d: "Sharp designs that hold up on screen and paper." },
+];
+
+const QUOTES = [
+  { name: "Emeka O.", role: "Barbershop owner, Lagos", text: "TwoMinDesign help me create my shop logo in one minute. E come out sharp! My customers don dey ask who design am." },
+  { name: "Tunde A.", role: "Fashion designer, Abuja", text: "I use am for my Instagram promo flyers. The AI understand Lagos style. Na serious tool be this." },
+  { name: "Chidi N.", role: "Restaurant owner, PH", text: "The Hustler plan worth every kobo. 70 credits last me well well for the month." },
 ];
 
 const POINTS = ["1 credit = 1 design", "Pay with Paystack", "Ready in about 2 minutes"];
 
+const NAV = [
+  { href: "#who", label: "Who it’s for" },
+  { href: "#how", label: "How it works" },
+  { href: "#tools", label: "Tools" },
+];
+
 /* -------------------------------------------------------------------------- */
-/*  Hero carousel                                                             */
+/*  Hero demo: pick a design type, see the prompt and the result               */
 /* -------------------------------------------------------------------------- */
 
-const SLIDE_ICONS = [Store, PenTool, GraduationCap, Share2];
-
-function HeroCarousel() {
-  const [index, setIndex] = useState(0);
-  const [hold, setHold] = useState(false); // mouse hover or keyboard focus
-  const [userPaused, setUserPaused] = useState(false);
-  const startX = useRef<number | null>(null);
-  const [reduced] = useState(
-    () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
-  );
-
-  const running = !hold && !userPaused;
-  const count = SLIDES.length;
-  const go = (n: number) => setIndex((n + count) % count);
+function Studio() {
+  const [i, setI] = useState(0);
+  const d = DEMO[i];
 
   return (
-    <div
-      className="lp-car lp-rise"
-      style={{ "--d": "300ms" } as CSSProperties}
-      role="group"
-      aria-roledescription="carousel"
-      aria-label="Examples of designs you can make"
-      onPointerEnter={(e) => e.pointerType === "mouse" && setHold(true)}
-      onPointerLeave={(e) => e.pointerType === "mouse" && setHold(false)}
-      onFocus={(e) => e.target.matches(":focus-visible") && setHold(true)}
-      onBlur={() => setHold(false)}
-      onTouchStart={(e) => {
-        startX.current = e.touches[0].clientX;
-      }}
-      onTouchEnd={(e) => {
-        if (startX.current === null) return;
-        const dx = e.changedTouches[0].clientX - startX.current;
-        startX.current = null;
-        if (Math.abs(dx) > 40) go(index + (dx < 0 ? 1 : -1));
-      }}
-    >
-      <div className="lp-sticker lp-float" aria-hidden>
-        Ready in
-        <br />
-        2 min
-      </div>
-
-      <div className="lp-chip lp-bob" aria-hidden>
-        <span key={index}>
-          <i>
-            <Check size={11} />
-          </i>
-          {SLIDES[index].sample.type} ready
-        </span>
-      </div>
-
-      <div className="lp-car-frame">
-        <div
-          className="lp-track"
-          style={{ transform: `translateX(-${index * 100}%)`, transition: reduced ? "none" : undefined }}
-          aria-live={running ? "off" : "polite"}
-        >
-          {SLIDES.map((s, i) => {
-            const Icon = SLIDE_ICONS[i];
-            return (
-              <div
-                key={s.who}
-                className="lp-slide"
-                data-active={i === index}
-                role="group"
-                aria-roledescription="slide"
-                aria-label={`${i + 1} of ${count}`}
-                aria-hidden={i !== index}
-              >
-                <div className="aspect-square sm:aspect-[5/4] overflow-hidden">
-                  <div className="lp-art">
-                    <SampleArt s={s.sample} />
-                  </div>
-                </div>
-                <div className="lp-cap p-5 flex items-center gap-4">
-                  <div className="lp-tile lp-tile-y shrink-0">
-                    <Icon size={22} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-bold" style={{ color: "var(--g-950)" }}>{s.who}</p>
-                    <p className="text-sm lp-muted">{s.line}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* The progress bar is the autoplay timer: when it finishes, the next slide shows. */}
-      <div className="lp-prog" aria-hidden>
-        <i key={index} style={{ animationPlayState: running ? "running" : "paused" }} onAnimationEnd={() => go(index + 1)} />
-      </div>
-
-      <div className="flex items-center justify-between mt-4">
-        <div className="flex items-center gap-2">
-          {SLIDES.map((s, i) => (
-            <button key={s.who} onClick={() => go(i)} className="lp-dot" aria-label={`Show ${s.who}`} aria-current={i === index} />
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="lp-icon-btn" onClick={() => setUserPaused((p) => !p)} aria-label={userPaused ? "Play slideshow" : "Pause slideshow"}>
-            {userPaused ? <Play size={16} /> : <Pause size={16} />}
+    <div className="lp-stage lp-dark">
+      <div className="lp-tabs" role="group" aria-label="Choose a design type">
+        {DEMO.map((t, n) => (
+          <button key={t.label} className="lp-tab" aria-pressed={n === i} onClick={() => setI(n)}>
+            {t.label}
           </button>
-          <button className="lp-icon-btn" onClick={() => go(index - 1)} aria-label="Previous slide">
-            <ChevronLeft size={18} />
-          </button>
-          <button className="lp-icon-btn" onClick={() => go(index + 1)} aria-label="Next slide">
-            <ChevronRight size={18} />
-          </button>
+        ))}
+      </div>
+
+      <div className="lp-prompt" aria-live="polite">
+        <small>You write</small>
+        <p key={d.label}>{d.prompt}</p>
+      </div>
+
+      <div className="lp-result">
+        <div className="lp-art" key={d.sample.id}>
+          <SampleArt s={d.sample} />
         </div>
+        <dl className="lp-meta">
+          <div>
+            <dt>You get</dt>
+            <dd>{d.sample.type}</dd>
+          </div>
+          <div>
+            <dt>Ready in</dt>
+            <dd>About 1 minute</dd>
+          </div>
+          <div>
+            <dt>Costs</dt>
+            <dd>1 credit</dd>
+          </div>
+        </dl>
       </div>
     </div>
   );
@@ -394,31 +411,17 @@ function HeroCarousel() {
 /*  Page                                                                      */
 /* -------------------------------------------------------------------------- */
 
-const delay = (i: number) => ({ "--d": `${i * 90}ms` }) as CSSProperties;
-
 export default function LandingPage() {
-  const [marqueePaused, setMarqueePaused] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // Fade sections in as they scroll into view
   useEffect(() => {
-    const els = document.querySelectorAll<HTMLElement>(".lp .lp-reveal");
-    if (!("IntersectionObserver" in window)) {
-      els.forEach((el) => el.classList.add("lp-in"));
-      return;
-    }
-    const io = new IntersectionObserver(
-      (entries) =>
-        entries.forEach((en) => {
-          if (en.isIntersecting) {
-            en.target.classList.add("lp-in");
-            io.unobserve(en.target);
-          }
-        }),
-      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" },
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, []);
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
+  const [main, ...others] = QUOTES;
 
   return (
     <div className="lp">
@@ -426,100 +429,87 @@ export default function LandingPage() {
 
       {/* Header */}
       <header className="lp-header">
-        <div className="lp-wrap h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
-            <span className="lp-logo">2</span>
-            <span className="font-display font-extrabold text-lg" style={{ color: "var(--g-950)" }}>
-              TwoMinDesign
-            </span>
+        <div className="lp-wrap lp-header-row">
+          <Link to="/" className="lp-brand">
+            <span className="lp-mark" aria-hidden>2</span>
+            TwoMinDesign
           </Link>
 
-          <nav aria-label="Main" className="hidden md:flex items-center gap-7">
-            <a href="#who" className="lp-link">Who it is for</a>
-            <a href="#how" className="lp-link">How it works</a>
-            <a href="#tools" className="lp-link">Tools</a>
-            <Link to="/pricing" className="lp-link">Pricing</Link>
+          <nav aria-label="Main" className="lp-nav">
+            {NAV.map((n) => (
+              <a key={n.href} href={n.href}>{n.label}</a>
+            ))}
+            <Link to="/pricing">Pricing</Link>
           </nav>
 
-          <div className="flex items-center gap-2">
-            <Link to="/auth" className="lp-link hidden sm:block px-3">Sign in</Link>
+          <div className="lp-actions">
+            <Link to="/auth" className="lp-signin">Sign in</Link>
             <Link to="/auth" className="lp-btn lp-btn-sm">Start free</Link>
+            <button
+              className="lp-menu-btn"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-expanded={menuOpen}
+              aria-controls="lp-drawer"
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+            >
+              {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
         </div>
+
+        {menuOpen && (
+          <nav id="lp-drawer" className="lp-drawer" aria-label="Mobile">
+            {NAV.map((n) => (
+              <a key={n.href} href={n.href} onClick={() => setMenuOpen(false)}>{n.label}</a>
+            ))}
+            <Link to="/pricing" onClick={() => setMenuOpen(false)}>Pricing</Link>
+            <Link to="/auth" onClick={() => setMenuOpen(false)}>Sign in</Link>
+          </nav>
+        )}
       </header>
 
       {/* Hero */}
       <section className="lp-hero">
-        <div className="lp-hero-bg" aria-hidden />
-        <span className="lp-orb" aria-hidden style={{ width: 260, height: 260, right: "6%", top: 40, background: "rgba(22,163,95,.28)" }} />
-        <span className="lp-orb" aria-hidden style={{ width: 200, height: 200, left: -40, bottom: 20, background: "rgba(255,201,60,.30)", animationDelay: "-6s" }} />
-
-        <div className="lp-wrap lp-hero-inner relative grid lg:grid-cols-[1.05fr_1fr] gap-12 lg:gap-16 items-center">
-          <div>
-            <span className="lp-pill lp-rise" style={delay(0)}>
-              <i>
-                <Zap size={12} />
-              </i>
-              Two-minute designs for everyone
-            </span>
-
-            <h1 className="lp-rise font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl leading-[1.05] mt-6 mb-5" style={delay(1)}>
-              Design your brand in minutes
-            </h1>
-
-            <p className="lp-rise lp-muted text-lg leading-relaxed max-w-xl mb-8" style={delay(2)}>
-              Logos, flyers, social posts and business cards for small businesses, freelance designers and students.
-              Describe what you need and AI go handle the rest.
+        <div className="lp-wrap lp-hero-grid">
+          <div className="lp-copy">
+            <h1 className="lp-h1">Your logo, flyer or post. Ready in two minutes.</h1>
+            <p className="lp-lead">
+              Describe what you need and the AI designs it. Made for small businesses, freelance designers and students.
             </p>
-
-            <div className="lp-rise flex flex-col sm:flex-row gap-3 mb-8" style={delay(3)}>
-              <Link to="/auth" className="lp-btn">
-                Start designing free
-                <span className="lp-btn-ico">
-                  <ArrowRight size={16} />
-                </span>
-              </Link>
-              <Link to="/pricing" className="lp-btn-ghost">
-                See pricing
-              </Link>
+            <div className="lp-cta">
+              <Link to="/auth" className="lp-btn">Start designing free</Link>
+              <Link to="/pricing" className="lp-btn lp-btn-line">See pricing</Link>
             </div>
-
-            <ul className="lp-rise flex flex-wrap gap-x-6 gap-y-2" style={delay(4)}>
+            <ul className="lp-facts">
               {POINTS.map((p) => (
-                <li key={p} className="lp-point">
-                  <b>
-                    <Check size={12} />
-                  </b>
+                <li key={p}>
+                  <Check size={16} aria-hidden />
                   {p}
                 </li>
               ))}
             </ul>
           </div>
 
-          <HeroCarousel />
+          <Studio />
         </div>
       </section>
 
-      {/* Marquee of designs */}
-      <section className="pb-20" aria-label="Designs made with TwoMinDesign">
-        <div className="lp-wrap lp-reveal mb-6 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="font-display font-bold text-2xl md:text-3xl">Made with TwoMinDesign</h2>
-            <p className="lp-muted text-sm mt-1">A few of the looks you can create.</p>
+      {/* Gallery */}
+      <section className="lp-section lp-wash" aria-labelledby="gallery-h">
+        <div className="lp-wrap">
+          <div className="lp-head">
+            <h2 id="gallery-h">Made with TwoMinDesign</h2>
+            <p>Flyers, logos, posts and cards. Each one started as a sentence.</p>
           </div>
-          <button className="lp-icon-btn shrink-0" onClick={() => setMarqueePaused((p) => !p)} aria-label={marqueePaused ? "Play design strip" : "Pause design strip"}>
-            {marqueePaused ? <Play size={16} /> : <Pause size={16} />}
-          </button>
-        </div>
-        <div className="lp-marquee-mask">
-          <div className="lp-marquee" style={marqueePaused ? { animationPlayState: "paused" } : undefined}>
-            {[...SAMPLES, ...SAMPLES].map((s, i) => (
-              <figure key={`${s.id}-${i}`} className="lp-tcard" aria-hidden={i >= SAMPLES.length}>
-                <div className="aspect-square">
+          <div className="lp-gallery">
+            {SAMPLES.map((s) => (
+              <figure key={s.id} className="lp-shot">
+                <div className="lp-shot-art">
                   <SampleArt s={s} />
                 </div>
-                <figcaption className="px-3 py-2.5 flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold truncate" style={{ color: "var(--g-950)" }}>{s.title}</span>
+                <figcaption>
+                  <b>{s.title}</b>
+                  <span>{s.type}</span>
                 </figcaption>
               </figure>
             ))}
@@ -528,158 +518,139 @@ export default function LandingPage() {
       </section>
 
       {/* Audiences */}
-      <section id="who" className="lp-soft py-20 scroll-mt-20">
-        <div className="lp-wrap">
-          <div className="max-w-2xl mb-12 lp-reveal">
-            <h2 className="font-display font-bold text-3xl md:text-4xl mb-3">Made for people who need good design, fast</h2>
-            <p className="lp-muted text-lg">Whether you are selling, freelancing or running a campus event, you get a clean design without a long wait.</p>
+      <section id="who" className="lp-section">
+        <div className="lp-wrap lp-split">
+          <div className="lp-head">
+            <h2>Built for people who need good design today</h2>
+            <p>Whether you’re selling, freelancing or running a campus event, you get a finished design without the wait.</p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {AUDIENCES.map((a, i) => (
-              <div key={a.title} className="lp-card lp-card-hover lp-reveal p-6" style={delay(i)}>
-                <div className="lp-tile mb-5">
-                  <a.icon size={22} />
+          <ul className="lp-rows">
+            {AUDIENCES.map((a) => (
+              <li key={a.title}>
+                <a.icon size={22} aria-hidden />
+                <div>
+                  <h3>{a.title}</h3>
+                  <p>{a.desc}</p>
                 </div>
-                <h3 className="font-display font-bold text-lg mb-2">{a.title}</h3>
-                <p className="lp-muted text-sm leading-relaxed">{a.desc}</p>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       </section>
 
       {/* How it works */}
-      <section id="how" className="py-20 scroll-mt-20">
+      <section id="how" className="lp-section lp-wash">
         <div className="lp-wrap">
-          <div className="max-w-2xl mb-12 lp-reveal">
-            <h2 className="font-display font-bold text-3xl md:text-4xl mb-3">Your design in about two minutes</h2>
-            <p className="lp-muted text-lg">Three steps. No design skills, no waiting for a reply on WhatsApp.</p>
+          <div className="lp-head">
+            <h2>From idea to download in about two minutes</h2>
+            <p>Three steps. No design skills, and no waiting for a reply on WhatsApp.</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-5">
-            {STEPS.map((s, i) => (
-              <div key={s.title} className="lp-card lp-reveal p-6" style={delay(i)}>
-                <div className="flex items-center justify-between mb-5">
-                  <span className="lp-step">{i + 1}</span>
+          <ol className="lp-steps">
+            {STEPS.map((s, n) => (
+              <li key={s.title}>
+                <div className="lp-step-top">
+                  <span className="lp-step-n" aria-hidden>{n + 1}</span>
                   <span className="lp-time">
-                    <Clock size={12} />
+                    <Clock size={14} aria-hidden />
                     {s.time}
                   </span>
                 </div>
-                <h3 className="font-display font-bold text-lg mb-2">{s.title}</h3>
-                <p className="lp-muted text-sm leading-relaxed">{s.desc}</p>
-              </div>
+                <h3>{s.title}</h3>
+                <p>{s.desc}</p>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
       </section>
 
       {/* Tools */}
-      <section id="tools" className="lp-soft py-20 scroll-mt-20">
+      <section id="tools" className="lp-section">
         <div className="lp-wrap">
-          <div className="max-w-2xl mb-12 lp-reveal">
-            <h2 className="font-display font-bold text-3xl md:text-4xl mb-3">More than a design generator</h2>
-            <p className="lp-muted text-lg">Everything you need to finish the job is in one dashboard, so you stop jumping between apps.</p>
+          <div className="lp-head">
+            <h2>More than a design generator</h2>
+            <p>Everything you need to finish the job is in one dashboard, so you stop jumping between apps.</p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {TOOLS.map((t, i) => (
-              <div key={t.title} className="lp-card lp-card-hover lp-reveal p-6 flex gap-4" style={delay(i)}>
-                <div className="lp-tile shrink-0">
-                  <t.icon size={22} />
-                </div>
+          <div className="lp-tools">
+            {TOOLS.map((t) => (
+              <div key={t.title} className="lp-tool">
+                <t.icon size={22} aria-hidden />
                 <div>
-                  <h3 className="font-display font-bold mb-1">{t.title}</h3>
-                  <p className="lp-muted text-sm leading-relaxed">{t.desc}</p>
+                  <h3>{t.title}</h3>
+                  <p>{t.desc}</p>
                 </div>
               </div>
             ))}
           </div>
-          <div className="grid sm:grid-cols-3 gap-4 mt-8">
-            {[
-              { icon: Zap, t: "One credit, one design", d: "Simple pricing. No subscriptions you forget about." },
-              { icon: Shield, t: "Secure Paystack payment", d: "Pay by card, bank transfer or USSD." },
-              { icon: Star, t: "Print-ready quality", d: "Sharp designs that hold up on screen and paper." },
-            ].map((f) => (
-              <div key={f.t} className="flex items-start gap-3 p-4">
-                <div className="lp-tile lp-tile-y" style={{ width: 40, height: 40, borderRadius: 13 }}>
-                  <f.icon size={18} />
-                </div>
+          <ul className="lp-perks">
+            {PERKS.map((f) => (
+              <li key={f.t}>
+                <f.icon size={20} aria-hidden />
                 <div>
-                  <p className="font-semibold text-sm" style={{ color: "var(--g-950)" }}>{f.t}</p>
-                  <p className="lp-muted text-sm">{f.d}</p>
+                  <b>{f.t}</b>
+                  <span>{f.d}</span>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       </section>
 
       {/* Testimonials */}
-      <section className="py-20">
+      <section className="lp-section lp-wash" aria-labelledby="quotes-h">
         <div className="lp-wrap">
-          <h2 className="lp-reveal font-display font-bold text-3xl md:text-4xl mb-12 max-w-2xl">What our users say</h2>
-          <div className="grid md:grid-cols-3 gap-5">
-            {TESTIMONIALS.map((t, i) => (
-              <figure key={t.name} className="lp-card lp-reveal p-6" style={delay(i)}>
-                <div className="flex gap-0.5 mb-4" aria-label="5 out of 5 stars">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star key={i} size={15} style={{ color: "var(--y)", fill: "var(--y)" }} />
-                  ))}
-                </div>
-                <blockquote className="text-sm leading-relaxed mb-5" style={{ color: "var(--ink)" }}>
-                  “{t.text}”
-                </blockquote>
-                <figcaption>
-                  <p className="font-semibold text-sm" style={{ color: "var(--g-950)" }}>{t.name}</p>
-                  <p className="text-xs lp-muted">{t.role}</p>
-                </figcaption>
-              </figure>
-            ))}
+          <div className="lp-head">
+            <h2 id="quotes-h">What our users say</h2>
+          </div>
+          <div className="lp-quotes">
+            <figure className="lp-quote-main">
+              <blockquote>“{main.text}”</blockquote>
+              <figcaption className="lp-who">
+                <b>{main.name}</b>
+                <span>{main.role}</span>
+              </figcaption>
+            </figure>
+            <div className="lp-quote-side">
+              {others.map((q) => (
+                <figure key={q.name}>
+                  <blockquote>“{q.text}”</blockquote>
+                  <figcaption className="lp-who">
+                    <b>{q.name}</b>
+                    <span>{q.role}</span>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="pb-20">
+      <section className="lp-section">
         <div className="lp-wrap">
-          <div className="lp-band lp-reveal px-6 py-14 md:px-14 md:py-16 grid md:grid-cols-[1.3fr_1fr] gap-8 items-center">
-            <div
-              aria-hidden
-              style={{ position: "absolute", right: -80, top: -80, width: 300, height: 300, borderRadius: 999, background: "radial-gradient(circle,rgba(255,201,60,.35),transparent 70%)" }}
-            />
-            <div className="relative">
-              <h2 className="font-display font-extrabold text-3xl md:text-4xl mb-3">Ready to build your brand today?</h2>
-              <p style={{ color: "rgba(255,255,255,.78)" }} className="text-lg">
-                Make your first design in about two minutes. Pick a plan when you need more credits.
-              </p>
+          <div className="lp-band lp-dark">
+            <div>
+              <h2>Make your first design today</h2>
+              <p>It takes about two minutes. Pick a plan when you need more credits.</p>
             </div>
-            <div className="relative flex flex-col sm:flex-row md:flex-col gap-3 md:items-stretch">
-              <Link to="/auth" className="lp-btn-yellow">
-                Start designing free
-                <ArrowRight size={18} />
-              </Link>
-              <Link
-                to="/pricing"
-                className="lp-btn-ghost"
-                style={{ background: "transparent", color: "#fff", borderColor: "rgba(255,255,255,.35)" }}
-              >
-                View plans and pricing
-              </Link>
+            <div className="lp-band-btns">
+              <Link to="/auth" className="lp-btn lp-btn-gold">Start designing free</Link>
+              <Link to="/pricing" className="lp-btn lp-btn-outline-light">View plans and pricing</Link>
             </div>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer style={{ borderTop: "1px solid var(--line)" }}>
-        <div className="lp-wrap py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <span className="lp-logo" style={{ width: 28, height: 28, borderRadius: 9, fontSize: 13 }}>2</span>
-            <span className="font-display font-bold text-sm" style={{ color: "var(--g-950)" }}>TwoMinDesign</span>
-          </div>
-          <p className="text-sm lp-muted">© {new Date().getFullYear()} TwoMinDesign. Design for small businesses, creators and students.</p>
-          <div className="flex gap-5 text-sm">
-            <Link to="/pricing" className="lp-link">Pricing</Link>
-            <Link to="/auth" className="lp-link">Sign in</Link>
+      <footer className="lp-footer">
+        <div className="lp-wrap lp-footer-row">
+          <Link to="/" className="lp-brand">
+            <span className="lp-mark" aria-hidden>2</span>
+            TwoMinDesign
+          </Link>
+          <p>© {new Date().getFullYear()} TwoMinDesign. Design for small businesses, creators and students.</p>
+          <div className="lp-footer-links">
+            <Link to="/pricing">Pricing</Link>
+            <Link to="/auth">Sign in</Link>
           </div>
         </div>
       </footer>
