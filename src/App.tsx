@@ -6,6 +6,7 @@ import PricingPage from "./pages/PricingPage";
 import DashboardPage from "./pages/DashboardPage";
 import AuthPage from "./pages/AuthPage";
 import HistoryPage from "./pages/HistoryPage";
+import LeadPage from "./pages/LeadPage";
 
 const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
 export const isClerkConfigured =
@@ -33,6 +34,8 @@ function AppRoutes() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/pricing" element={<PricingPage />} />
+      {/* Public page customers open after scanning a QR. No login. Must be above the "*" route. */}
+      <Route path="/c/:slug" element={<LeadPage />} />
       <Route
         path="/dashboard"
         element={
@@ -74,6 +77,7 @@ function AppWithoutClerk() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/c/:slug" element={<LeadPage />} />
           <Route path="*" element={<LandingPage />} />
         </Routes>
       </BrowserRouter>
