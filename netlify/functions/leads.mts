@@ -1,7 +1,8 @@
-import type { Config, Context } from "@netlify/functions";
-import { supabase, json, getUserId, myCampaignIds } from "../lib/leads";
+import { supabase, json, getUserId, myCampaignIds, lastSegment } from "./lib/leads";
 
-export default async (req: Request, context: Context) => {
+// GET /api/leads            -> your leads (optional ?campaignId=...)
+// DELETE /api/leads/:id     -> delete one of your leads
+export default async (req: Request) => {
   const clerkId = await getUserId(req);
   if (!clerkId) return json({ error: "Sign in first." }, 401);
 
@@ -23,8 +24,8 @@ export default async (req: Request, context: Context) => {
   }
 
   if (req.method === "DELETE") {
-    const id = context.params?.id;
-    if (!id) return json({ error: "Missing lead id." }, 400);
+    const id = lastSegment(req);
+    if (!id || id === "leads") return json({ error: "Missing lead id." }, 400);
     if (!ids.length) return json({ ok: true });
     const { error } = await supabase.from("leads").delete().eq("id", id).in("campaign_id", ids);
     if (error) return json({ error: "Could not delete." }, 500);
@@ -33,5 +34,3 @@ export default async (req: Request, context: Context) => {
 
   return json({ error: "Method not allowed" }, 405);
 };
-
-export const config: Config = { path: ["/api/leads", "/api/leads/:id"] };

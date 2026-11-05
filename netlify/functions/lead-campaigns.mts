@@ -1,5 +1,4 @@
-import type { Config } from "@netlify/functions";
-import { supabase, json, clean, makeSlug, readBody, getUserId } from "../lib/leads";
+import { supabase, json, clean, makeSlug, readBody, getUserId } from "./lib/leads";
 
 const MAX_CAMPAIGNS = 20;
 
@@ -55,5 +54,3 @@ export default async (req: Request) => {
 
   return json({ error: "Method not allowed" }, 405);
 };
-
-export const config: Config = { path: "/api/lead-campaigns" };

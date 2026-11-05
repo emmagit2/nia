@@ -16,6 +16,12 @@ export const makeSlug = () =>
 export const hashIp = (ip: string) =>
   crypto.createHash("sha256").update(`${process.env.CLERK_SECRET_KEY}:${ip}`).digest("hex").slice(0, 32);
 
+/** Last piece of the URL path, e.g. /api/leads/abc123 -> abc123 */
+export const lastSegment = (req: Request) => {
+  const parts = new URL(req.url).pathname.split("/").filter(Boolean);
+  return decodeURIComponent(parts[parts.length - 1] || "");
+};
+
 /** Reads a small JSON body. Returns null if it is too big or not JSON. */
 export async function readBody(req: Request, max = 20000): Promise<Record<string, any> | null> {
   try {
