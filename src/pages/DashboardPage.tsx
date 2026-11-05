@@ -48,7 +48,7 @@ const STYLES = `
   --accent:#FFD21F; --accent-text:#FFD21F; --ring:rgba(255,210,31,.22);
   --soft:rgba(255,210,31,.10); --shadow:0 20px 40px -24px rgba(0,0,0,.8);
   --glow:radial-gradient(60% 50% at 50% 0%,rgba(255,210,31,.10),transparent 70%);
-  min-height:100vh; background:var(--bg); color:var(--text); position:relative;
+  min-height:100vh; min-height:100dvh; overflow-x:clip; background:var(--bg); color:var(--text); position:relative;
 }
 .og-root[data-theme="light"]{
   --bg:#F3F4F7; --surface:#FFFFFF; --surface-2:#F0F1F5; --input:#FFFFFF;
@@ -123,6 +123,7 @@ const STYLES = `
 @keyframes og-in{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
 .og-in{ animation:og-in .35s ease both; }
 @media (prefers-reduced-motion:reduce){ .og-root *{ animation:none !important; transition:none !important; } }
+@media (max-width:640px){ .og-input{ font-size:16px; } }
 `;
 
 /* -------------------------------------------------------------------------- */
@@ -967,7 +968,7 @@ function LeadsTool({ lastDesign }: { lastDesign: string | null }) {
 
       {/* ---------------------------- Create QR ---------------------------- */}
       {tab === "setup" && (
-        <div className="grid xl:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
           <section className="xl:col-span-2 flex flex-col gap-5 min-w-0">
             <div>
               <Label>Business name *</Label>
@@ -1046,7 +1047,7 @@ function LeadsTool({ lastDesign }: { lastDesign: string | null }) {
         (!active ? (
           needCampaign
         ) : (
-          <div className="grid xl:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
             <section className="xl:col-span-2 flex flex-col gap-5 min-w-0">
               <div>
                 <Label>Your design *</Label>
@@ -1210,7 +1211,7 @@ function LeadsTool({ lastDesign }: { lastDesign: string | null }) {
                         {l.message && <p className="og-faint text-xs mt-2 line-clamp-2">{l.message}</p>}
                       </div>
                       <p className="text-xs og-faint lg:w-32 lg:text-right">{fmtDate(l.created_at)}</p>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <a className="og-ghost" href={`tel:${l.phone.replace(/\s/g, "")}`} aria-label={`Call ${l.name}`}>
                           <Phone size={14} />
                           Call
@@ -1501,7 +1502,7 @@ export default function DashboardPage() {
       {/* Tools */}
       <section>
         <h2 className="text-lg font-bold og-text mb-4">Your tools</h2>
-        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {TOOLS.map((t) => (
             <button key={t.id} onClick={() => goTo(t.id)} className="og-card og-lift og-focus text-left p-5 flex flex-col gap-4">
               <div className="flex items-start justify-between">
@@ -1873,7 +1874,7 @@ export default function DashboardPage() {
           <p className="og-muted text-sm">{tool.blurb}.</p>
         </div>
 
-        <div className="grid xl:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
           <section className="xl:col-span-2 flex flex-col gap-5 min-w-0">
             {renderForm()}
 
@@ -1937,7 +1938,7 @@ export default function DashboardPage() {
             </span>
           </Link>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <ThemeSwitch theme={theme} onToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} />
             <Link to="/history" className="og-ghost">
               <History size={15} />
@@ -1953,9 +1954,9 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="relative max-w-7xl mx-auto px-4 py-6 lg:py-8 grid lg:grid-cols-[260px_1fr] gap-6 lg:gap-10">
+      <div className="relative max-w-7xl mx-auto px-4 py-6 lg:py-8 grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-6 lg:gap-10">
         {/* Navigation */}
-        <nav aria-label="Tools" className="lg:sticky lg:top-24 lg:self-start">
+        <nav aria-label="Tools" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
           {/* Mobile: scrolling pills */}
           <div className="lg:hidden flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
             <button onClick={() => goTo("home")} aria-current={view === "home" ? "page" : undefined} className="og-pill og-focus">
