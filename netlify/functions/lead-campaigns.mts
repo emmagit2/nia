@@ -29,13 +29,19 @@ async function readBody(req: Request, max = 20000): Promise<Record<string, any> 
 /** Signed-in Clerk user id from the Bearer token, or null. Never trust an id sent in the body. */
 async function getUserId(req: Request): Promise<string | null> {
   try {
-    const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+    const header = req.headers.get("authorization") || "";
+    console.log("AUTH HEADER PRESENT:", header ? "yes" : "NO");
+    const token = header.replace(/^Bearer\s+/i, "");
     if (!token) return null;
     const r: any = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY! });
-    if (r?.errors?.length) return null; // newer Clerk versions return { data, errors }
+    if (r?.errors?.length) {
+      console.log("CLERK VERIFY ERRORS:", JSON.stringify(r.errors));
+      return null;
+    }
     const payload = r?.data ?? r;
     return typeof payload?.sub === "string" ? payload.sub : null;
-  } catch {
+  } catch (e: any) {
+    console.log("CLERK VERIFY THREW:", e?.message || e);
     return null;
   }
 }
