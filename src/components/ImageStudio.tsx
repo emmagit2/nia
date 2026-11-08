@@ -152,19 +152,39 @@ function Pick({ label, value, options, set }: { label: string; value: string; op
 function usePaid(ctx: StudioCtx, cost: number) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const run = async (job: () => Promise<void>, fallback = "Something went wrong. Try again.") => {
+
+  const run = async (
+    job: () => Promise<void>,
+    fallback = "Something went wrong. Try again."
+  ) => {
     setError(null);
-    if (cost > 0 && !(await ctx.charge(cost))) return;
     setBusy(true);
+
+    let charged = false;
+
     try {
+      if (cost > 0) {
+        const success = await ctx.charge(cost);
+        if (!success) return;
+        charged = true;
+      }
+
       await job();
     } catch (e) {
       setError(errText(e, fallback));
-      if (cost > 0) await ctx.refund(cost);
+
+      if (charged) {
+        try {
+          await ctx.refund(cost);
+        } catch {
+          setError("The operation failed and your credit refund could not be confirmed. Please contact support.");
+        }
+      }
     } finally {
       setBusy(false);
     }
   };
+
   return { busy, error, setError, run };
 }
 
