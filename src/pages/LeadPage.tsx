@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import { CheckCircle2, MapPin, Send } from "lucide-react";
+import DynamicFields from "../components/DynamicFields";
+import type { CustomField } from "../components/FieldBuilder";
 
 interface PublicCampaign {
   business_name: string;
   headline: string;
   services: string[];
+  custom_fields: CustomField[];
 }
 
 /** Public page a customer lands on after scanning the QR. No login. Mobile first. */
@@ -20,6 +23,7 @@ export default function LeadPage() {
   const [interest, setInterest] = useState("");
   const [locationText, setLocationText] = useState("");
   const [message, setMessage] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [website, setWebsite] = useState(""); // honeypot, hidden from people
   const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
@@ -55,6 +59,9 @@ export default function LeadPage() {
     setError(null);
     if (!name.trim()) return setError("Please enter your name.");
     if (phone.replace(/\D/g, "").length < 7) return setError("Enter a valid phone number.");
+    for (const f of camp?.custom_fields ?? []) {
+      if (f.required && !(answers[f.id] ?? "").trim()) return setError(`Please answer: ${f.label}`);
+    }
     setSending(true);
     try {
       await axios.post(`/api/public/lead/${slug}`, {
@@ -65,6 +72,7 @@ export default function LeadPage() {
         locationText,
         lat: geo?.lat ?? null,
         lng: geo?.lng ?? null,
+        answers,
         website,
       });
       setDone(true);
@@ -120,6 +128,13 @@ export default function LeadPage() {
                 {geo ? "Location shared" : geoBusy ? "Getting location..." : "Share my exact location (optional)"}
               </button>
             </div>
+
+            <DynamicFields
+              fields={camp.custom_fields ?? []}
+              values={answers}
+              onChange={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))}
+              inputClass={field}
+            />
 
             <textarea className={`${field} resize-none`} rows={3} placeholder="Anything else? (optional)" value={message} onChange={(e) => setMessage(e.target.value)} maxLength={300} />
 

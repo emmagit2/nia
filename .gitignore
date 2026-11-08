@@ -3,3 +3,9 @@ node_modules
 # Local Netlify folder
 .netlify
 .env
+nia/.env
+nia/.env.*
+!nia/.env.example
+
+nia/node_modules/
+nia/dist/

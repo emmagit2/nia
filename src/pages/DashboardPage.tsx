@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ComponentType, type CSSProperties, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { useUser as useClerkUser, useAuth, UserButton } from "@clerk/clerk-react";
+import { useEffect, useRef, useState, type ComponentType, type CSSProperties, type DragEvent, type ReactNode } from "react";
+import { useUser as useClerkUser, UserButton } from "@clerk/clerk-react";
+
 import { Link } from "react-router-dom";
 import {
   Zap,
@@ -22,21 +23,32 @@ import {
   LayoutDashboard,
   ArrowUpRight,
   QrCode,
-  ImageDown,
-  Move,
   Search,
-  RefreshCw,
-  FileSpreadsheet,
-  Phone,
-  MapPin,
-  MessageCircle,
-  Trash2,
+  Wand2,
+  CalendarDays,
+  CalendarClock,
 } from "lucide-react";
 import axios from "axios";
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useUser } from "../hooks/useUser";
 import BuyExtraModal from "../components/BuyExtraModal";
-
+import ImageStudio, { STUDIO_IDS, STUDIO_COSTS, type StudioToolId } from "../components/ImageStudio";
+import {
+  MODERN_STYLES,
+  Aurora,
+  ScrollProgress,
+  SpotlightCard,
+  HeroBanner,
+  StatsStrip,
+  IdeaMarquee,
+  CommandPalette,
+  Celebrate,
+  useCommandK,
+  type PaletteItem,
+} from "../components/ModernUI";
+import EventsTool from "../components/EventsTool";
+ import LeadsTool from "../components/LeadsTool";
+import BookingTool from "../components/BookingTool";
 /* -------------------------------------------------------------------------- */
 /*  Theme + component styles (scoped to .og-root, no Tailwind config needed)   */
 /* -------------------------------------------------------------------------- */
@@ -130,8 +142,8 @@ const STYLES = `
 /*  Tool configuration                                                        */
 /* -------------------------------------------------------------------------- */
 
-type ToolId = "design" | "certificate" | "pdfFix" | "bgRemove" | "pdfToImage" | "pdfToText" | "editor" | "leads";
-type View = "home" | ToolId;
+  type ToolId = "design" | "certificate" | "pdfFix" | "bgRemove" | "pdfToImage" | "pdfToText" | "editor" | "leads" | "events" | "booking" | "studio";
+ type View = "home" | ToolId;
 type IconType = ComponentType<{ size?: number; className?: string }>;
 
 interface Tool {
@@ -141,20 +153,39 @@ interface Tool {
   icon: IconType;
   cost: number; // credits per use, 0 = free
   group: string;
+  /** Text for the badge when the tool mixes free and paid parts (Image Studio). */
+  note?: string;
+  /** Short text for the sidebar. */
+  short?: string;
 }
 
 // Change the `cost` values to whatever pricing you want.
+// Image Studio holds five tools as tabs, so the sidebar stays short.
 const TOOLS: Tool[] = [
   { id: "design", label: "AI Designer", blurb: "Logos, flyers, social posts and business cards", icon: Sparkles, cost: 1, group: "Create" },
+  { id: "studio", label: "Image Studio", blurb: "Describe, upscale, resize, split text from a design, or turn it into SVG", icon: Wand2, cost: 0, group: "Image tools", note: "Free and 1 to 2 credits", short: "1-2" },
+  { id: "bgRemove", label: "Background Removal", blurb: "Cut out the subject and get a transparent PNG", icon: Eraser, cost: 1, group: "Image tools" },
   { id: "certificate", label: "Certificate Correction", blurb: "Fix names, dates, spelling and layout on a certificate", icon: Award, cost: 2, group: "Fix and clean up" },
   { id: "pdfFix", label: "PDF Design Correction", blurb: "Clean up the look of a PDF page or design", icon: FileCheck2, cost: 2, group: "Fix and clean up" },
-  { id: "bgRemove", label: "Background Removal", blurb: "Cut out the subject and get a transparent PNG", icon: Eraser, cost: 1, group: "Fix and clean up" },
   { id: "pdfToImage", label: "PDF to Image", blurb: "Turn every PDF page into a PNG", icon: FileImage, cost: 0, group: "PDF and documents" },
   { id: "pdfToText", label: "PDF to Editable Text", blurb: "Pull the text out of a PDF or scanned image", icon: ScanText, cost: 0, group: "PDF and documents" },
   { id: "editor", label: "Document Editor", blurb: "Open, edit and export text as TXT or Word", icon: FilePen, cost: 0, group: "PDF and documents" },
   { id: "leads", label: "Client Leads", blurb: "Put a QR on your design and collect customers who are interested", icon: QrCode, cost: 0, group: "Grow" },
+  { id: "events", label: "Event Registration", blurb: "Create a QR for your wedding, party or program so guests can register", icon: CalendarDays, cost: 0, group: "Grow" },
+  { id: "booking", label: "Bookings", blurb: "Create a QR so customers can pick a day and time to book you", icon: CalendarClock, cost: 0, group: "Grow" },
 ];
-const GROUPS = ["Create", "Grow", "Fix and clean up", "PDF and documents"];
+const GROUPS = ["Create", "Image tools", "Grow", "Fix and clean up", "PDF and documents"];
+
+const STUDIO_LABELS: Record<StudioToolId, string> = {
+  describe: "Describe",
+  upscale: "Upscale",
+  resize: "Resize",
+  layerize: "Split text",
+  vectorize: "To SVG",
+};
+
+const toolBadge = (t: Tool) => t.note ?? (t.cost === 0 ? "Free" : `${t.cost} ${t.cost === 1 ? "credit" : "credits"}`);
+const sideLabel = (t: Tool) => t.short ?? (t.cost === 0 ? "Free" : String(t.cost));
 
 type DesignType = "Logo" | "Flyer" | "Social Post" | "Business Card";
 const DESIGN_TYPES: DesignType[] = ["Logo", "Flyer", "Social Post", "Business Card"];
@@ -539,7 +570,7 @@ function TemplateGallery({
 }) {
   const list = filter === "All" ? TEMPLATES : TEMPLATES.filter((t) => t.type === filter);
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 og-stagger">
       {list.map((t) => (
         <button
           key={t.id}
@@ -565,677 +596,7 @@ function TemplateGallery({
     </div>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Page                                                                      */
-/* -------------------------------------------------------------------------- */
-
-/* -------------------------------------------------------------------------- */
-/*  Client leads: QR campaigns, QR on a design, and the leads list             */
-/* -------------------------------------------------------------------------- */
-
-interface Campaign {
-  id: string;
-  slug: string;
-  business_name: string;
-  headline: string;
-  services?: string[];
-  lead_count?: number;
-}
-
-interface Lead {
-  id: string;
-  campaign_id: string;
-  name: string;
-  phone: string;
-  location_text?: string | null;
-  lat?: number | null;
-  lng?: number | null;
-  interest?: string | null;
-  message?: string | null;
-  created_at: string;
-}
-
-type LeadsTab = "setup" | "place" | "leads";
-type Corner = "tl" | "tr" | "bl" | "br";
-
-const CAPTION_FRAC = 0.15; // caption strip height, as a share of the QR card width
-
-const waLink = (phone: string) => {
-  let d = phone.replace(/\D/g, "");
-  if (d.startsWith("0") && d.length === 11) d = "234" + d.slice(1); // Nigerian local format
-  return `https://wa.me/${d}`;
-};
-
-const mapLink = (l: Lead) =>
-  l.lat != null && l.lng != null
-    ? `https://www.google.com/maps?q=${l.lat},${l.lng}`
-    : l.location_text
-      ? `https://www.google.com/maps/search/${encodeURIComponent(l.location_text)}`
-      : null;
-
-const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleString("en-NG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-
-// Stops spreadsheet formulas ("=...", "@...") typed by a stranger from running when you open the export
-const csvCell = (v: unknown) => {
-  let s = String(v ?? "");
-  if (!/^\+?[\d\s()-]+$/.test(s) && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
-  return `"${s.replace(/"/g, '""')}"`;
-};
-
-const loadImage = (src: string) =>
-  new Promise<HTMLImageElement>((res, rej) => {
-    const i = new Image();
-    i.onload = () => res(i);
-    i.onerror = () => rej(new Error("load"));
-    i.src = src;
-  });
-
-function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-function LeadsTool({ lastDesign }: { lastDesign: string | null }) {
-  const { getToken } = useAuth();
-
-  const [tab, setTab] = useState<LeadsTab>("setup");
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  // new campaign
-  const [bName, setBName] = useState("");
-  const [headline, setHeadline] = useState("Interested in our service? Leave your details and we will contact you.");
-  const [services, setServices] = useState("");
-
-  // QR
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  // QR on a design
-  const [designFile, setDesignFile] = useState<File | null>(null);
-  const [designSrc, setDesignSrc] = useState<string | null>(null);
-  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
-  const [qr, setQr] = useState({ x: 0.7, y: 0.7, size: 0.24 }); // fractions of the design
-  const [caption, setCaption] = useState("Scan to get a quote");
-  const [composing, setComposing] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ dx: number; dy: number } | null>(null);
-
-  // leads
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [leadFilter, setLeadFilter] = useState("all");
-  const [search, setSearch] = useState("");
-  const [loadingLeads, setLoadingLeads] = useState(false);
-
-  const active = campaigns.find((c) => c.id === activeId) ?? null;
-  const link = active ? `${window.location.origin}/c/${active.slug}` : "";
-
-  /** Every request carries the user's Clerk token so the server knows who is asking. */
-  const api = async <T,>(method: "get" | "post" | "delete", url: string, data?: unknown): Promise<T> => {
-    const token = await getToken();
-    const res = await axios.request<T>({ method, url, data, headers: { Authorization: `Bearer ${token}` } });
-    return res.data;
-  };
-
-  // load campaigns once
-  useEffect(() => {
-    (async () => {
-      try {
-        const d = await api<{ campaigns?: Campaign[] }>("get", "/api/lead-campaigns");
-        // if the server is not running, the app can answer with a web page instead of data
-        if (!Array.isArray(d?.campaigns)) throw new Error("bad response");
-        setCampaigns(d.campaigns);
-        setActiveId(d.campaigns[0]?.id ?? null);
-      } catch {
-        setErr("Could not reach the server. Run the app with netlify dev (not npm run dev), then refresh.");
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // make the QR image whenever the active campaign changes
-  useEffect(() => {
-    if (!link) {
-      setQrUrl(null);
-      return;
-    }
-    let live = true;
-    import("qrcode").then((Q) =>
-      Q.toDataURL(link, { width: 720, margin: 1, errorCorrectionLevel: "H", color: { dark: "#0A2E1E", light: "#FFFFFF" } }).then(
-        (url) => live && setQrUrl(url),
-      ),
-    );
-    return () => {
-      live = false;
-    };
-  }, [link]);
-
-  const loadLeads = async () => {
-    setLoadingLeads(true);
-    setErr(null);
-    try {
-      const d = await api<{ leads: Lead[] }>("get", `/api/leads${leadFilter !== "all" ? `?campaignId=${leadFilter}` : ""}`);
-      setLeads(Array.isArray(d?.leads) ? d.leads : []);
-    } catch {
-      setErr("Could not load your leads. Try again.");
-    } finally {
-      setLoadingLeads(false);
-    }
-  };
-
-  useEffect(() => {
-    if (tab === "leads") loadLeads();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, leadFilter]);
-
-  const createCampaign = async () => {
-    if (!bName.trim()) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const d = await api<{ campaign: Campaign }>("post", "/api/lead-campaigns", {
-        businessName: bName.trim(),
-        headline: headline.trim(),
-        services: services.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 8),
-      });
-      if (!d?.campaign) throw new Error("bad response");
-      setCampaigns((c) => [d.campaign, ...c]);
-      setActiveId(d.campaign.id);
-      setBName("");
-      setServices("");
-    } catch {
-      setErr("Could not create the campaign. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const copyLink = async () => {
-    await navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
-  /* ---- put the QR on a design ---- */
-
-  const openDesign = async (src: string) => {
-    setErr(null);
-    try {
-      let url = src;
-      if (/^https?:/.test(src)) url = URL.createObjectURL(await (await fetch(src)).blob());
-      const img = await loadImage(url);
-      setDesignSrc(url);
-      setDims({ w: img.naturalWidth, h: img.naturalHeight });
-    } catch {
-      setErr("Could not open that design. Upload the file from your device instead.");
-    }
-  };
-
-  const onDesignFile = async (f: File | null) => {
-    setDesignFile(f);
-    if (!f) {
-      setDesignSrc(null);
-      setDims(null);
-      return;
-    }
-    try {
-      if (isPdf(f)) await openDesign((await renderPdfPages(f, 2))[0]);
-      else if (isImage(f)) await openDesign(URL.createObjectURL(f));
-      else setErr("Upload a PDF or an image.");
-    } catch {
-      setErr("Could not read that file.");
-    }
-  };
-
-  const ar = dims ? dims.w / dims.h : 1;
-  const capFrac = caption.trim() ? CAPTION_FRAC : 0;
-  const cardHFrac = qr.size * (1 + capFrac) * ar; // QR card height as a share of design height
-  const maxY = Math.max(0, 1 - cardHFrac);
-  const shownY = Math.min(qr.y, maxY);
-
-  const place = (x: number, y: number, size = qr.size) => {
-    const h = size * (1 + capFrac) * ar;
-    setQr({ size, x: Math.min(Math.max(0, x), 1 - size), y: Math.min(Math.max(0, y), Math.max(0, 1 - h)) });
-  };
-
-  const snap = (c: Corner) => {
-    const m = 0.04;
-    place(c.includes("l") ? m : 1 - qr.size - m, c.includes("t") ? m : 1 - cardHFrac - m);
-  };
-
-  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const box = boxRef.current?.getBoundingClientRect();
-    if (!box) return;
-    drag.current = { dx: (e.clientX - box.left) / box.width - qr.x, dy: (e.clientY - box.top) / box.height - shownY };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const box = boxRef.current?.getBoundingClientRect();
-    if (!drag.current || !box) return;
-    place((e.clientX - box.left) / box.width - drag.current.dx, (e.clientY - box.top) / box.height - drag.current.dy);
-  };
-  const onUp = () => {
-    drag.current = null;
-  };
-
-  const downloadComposite = async () => {
-    if (!designSrc || !dims || !qrUrl) return;
-    setComposing(true);
-    setErr(null);
-    try {
-      const [design, qrImg] = await Promise.all([loadImage(designSrc), loadImage(qrUrl)]);
-      const { w: W, h: H } = dims;
-      const canvas = document.createElement("canvas");
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("no canvas");
-      ctx.drawImage(design, 0, 0, W, H);
-
-      const cw = qr.size * W;
-      const pad = cw * 0.07;
-      const side = cw - 2 * pad;
-      const capH = capFrac * cw;
-      const ch = pad + side + capH + pad;
-      const cx = qr.x * W;
-      const cy = shownY * H;
-
-      ctx.fillStyle = "#FFFFFF";
-      roundRectPath(ctx, cx, cy, cw, ch, cw * 0.06);
-      ctx.fill();
-      ctx.drawImage(qrImg, cx + pad, cy + pad, side, side);
-
-      const text = caption.trim();
-      if (text) {
-        let fs = cw * 0.07;
-        ctx.font = `700 ${fs}px system-ui, sans-serif`;
-        while (ctx.measureText(text).width > cw - 2 * pad && fs > 6) {
-          fs -= 1;
-          ctx.font = `700 ${fs}px system-ui, sans-serif`;
-        }
-        ctx.fillStyle = "#0A2E1E";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(text, cx + cw / 2, cy + pad + side + capH / 2);
-      }
-      canvas.toBlob((b) => b && saveBlob(b, `twomindesign_with_qr_${Date.now()}.png`), "image/png");
-    } catch {
-      setErr("Could not build the final image. Try again.");
-    } finally {
-      setComposing(false);
-    }
-  };
-
-  /* ---- leads list + export ---- */
-
-  const campaignName = (id: string) => campaigns.find((c) => c.id === id)?.business_name ?? "";
-  const filtered = leads.filter((l) => {
-    const q = search.trim().toLowerCase();
-    return !q || [l.name, l.phone, l.location_text, l.interest].some((v) => (v ?? "").toLowerCase().includes(q));
-  });
-
-  const exportRows = () =>
-    filtered.map((l) => ({
-      Name: l.name,
-      Phone: l.phone,
-      Location: l.location_text ?? "",
-      Latitude: l.lat ?? "",
-      Longitude: l.lng ?? "",
-      Interest: l.interest ?? "",
-      Message: l.message ?? "",
-      Campaign: campaignName(l.campaign_id),
-      Date: new Date(l.created_at).toLocaleString("en-NG"),
-    }));
-
-  const stamp = () => new Date().toISOString().slice(0, 10);
-
-  const exportCsv = () => {
-    const rows = exportRows();
-    if (!rows.length) return;
-    const head = Object.keys(rows[0]);
-    const body = rows.map((r) => head.map((k) => csvCell((r as Record<string, unknown>)[k])).join(","));
-    saveBlob(new Blob(["\uFEFF" + [head.join(","), ...body].join("\r\n")], { type: "text/csv;charset=utf-8" }), `twomindesign_leads_${stamp()}.csv`);
-  };
-
-  const exportXlsx = async () => {
-    const rows = exportRows();
-    if (!rows.length) return;
-    const XLSX = await import("xlsx");
-    // same formula-injection guard as the CSV
-    const safe = rows.map((r) =>
-      Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === "string" && /^[=+\-@\t\r]/.test(v) && !/^\+?[\d\s()-]+$/.test(v) ? "'" + v : v])),
-    );
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(safe), "Leads");
-    XLSX.writeFile(wb, `twomindesign_leads_${stamp()}.xlsx`);
-  };
-
-  const removeLead = async (id: string) => {
-    if (!window.confirm("Delete this lead? This cannot be undone.")) return;
-    try {
-      await api("delete", `/api/leads/${id}`);
-      setLeads((ls) => ls.filter((l) => l.id !== id));
-    } catch {
-      setErr("Could not delete that lead.");
-    }
-  };
-
-  /* ---- UI ---- */
-
-  const TABS: { id: LeadsTab; label: string }[] = [
-    { id: "setup", label: "Create QR" },
-    { id: "place", label: "Put QR on a design" },
-    { id: "leads", label: "Leads" },
-  ];
-
-  const needCampaign = (
-    <div className="og-card p-8 text-center">
-      <div className="og-tile w-14 h-14 rounded-2xl mx-auto mb-4">
-        <QrCode size={26} />
-      </div>
-      <p className="font-semibold og-text mb-1">Create a QR campaign first</p>
-      <p className="text-sm og-muted mb-5">Your QR code opens a short form where interested customers leave their details.</p>
-      <button className="og-ghost" onClick={() => setTab("setup")}>
-        Go to Create QR
-      </button>
-    </div>
-  );
-
-  return (
-    <div className="flex flex-col gap-6 og-in">
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Client leads">
-        {TABS.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} data-active={tab === t.id} onClick={() => setTab(t.id)} className="og-chip og-focus !py-2 !px-4 !text-sm">
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {err && (
-        <div role="alert" className="rounded-2xl p-4 text-sm border" style={{ background: "rgba(239,68,68,.08)", borderColor: "rgba(239,68,68,.3)", color: "#ef4444" }}>
-          {err}
-        </div>
-      )}
-
-      {/* ---------------------------- Create QR ---------------------------- */}
-      {tab === "setup" && (
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-          <section className="xl:col-span-2 flex flex-col gap-5 min-w-0">
-            <div>
-              <Label>Business name *</Label>
-              <input className="og-input" placeholder="e.g: Emeka's Barbershop" value={bName} onChange={(e) => setBName(e.target.value)} disabled={busy} />
-            </div>
-            <div>
-              <Label>What customers see on the form</Label>
-              <textarea className="og-input resize-none" rows={3} value={headline} onChange={(e) => setHeadline(e.target.value)} disabled={busy} maxLength={140} />
-            </div>
-            <div>
-              <Label note="(optional)">Services they can pick</Label>
-              <input className="og-input" placeholder="Haircut, Beard trim, Home service" value={services} onChange={(e) => setServices(e.target.value)} disabled={busy} />
-              <p className="text-xs og-faint mt-1.5">Separate with commas.</p>
-            </div>
-            <Btn icon={QrCode} onClick={createCampaign} loading={busy} loadingText="Creating..." disabled={!bName.trim()}>
-              Create QR campaign
-            </Btn>
-          </section>
-
-          <section className="xl:col-span-3 min-w-0 flex flex-col gap-4">
-            {campaigns.length > 1 && (
-              <div className="flex flex-wrap gap-2">
-                {campaigns.map((c) => (
-                  <button key={c.id} className="og-chip og-focus" data-active={c.id === activeId} onClick={() => setActiveId(c.id)}>
-                    {c.business_name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {active ? (
-              <div className="og-card p-5 sm:p-6 flex flex-col sm:flex-row gap-6 og-in">
-                <div className="shrink-0 mx-auto sm:mx-0">
-                  <div className="rounded-2xl bg-white p-3 border og-divider" style={{ width: 220 }}>
-                    {qrUrl ? <img src={qrUrl} alt={`QR code for ${active.business_name}`} className="w-full block" /> : <div className="aspect-square flex items-center justify-center"><span className="og-spin og-spin-lg" /></div>}
-                  </div>
-                </div>
-                <div className="min-w-0 flex-1 flex flex-col gap-4">
-                  <div>
-                    <p className="font-display font-bold text-lg og-text">{active.business_name}</p>
-                    <p className="text-sm og-muted">{active.headline}</p>
-                  </div>
-                  <div className="flex items-center gap-2 og-input" style={{ padding: ".5rem .5rem .5rem .9rem" }}>
-                    <span className="text-sm og-muted truncate flex-1">{link}</span>
-                    <button onClick={copyLink} className="og-ghost shrink-0">
-                      {copied ? <Check size={14} /> : <Copy size={14} />}
-                      {copied ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Btn small icon={ImageDown} onClick={() => setTab("place")}>
-                      Put it on a design
-                    </Btn>
-                    <button className="og-ghost" disabled={!qrUrl} onClick={() => qrUrl && downloadUrl(qrUrl, `twomindesign_qr_${active.slug}.png`)}>
-                      <Download size={14} />
-                      Download QR
-                    </button>
-                    <button className="og-ghost" onClick={() => { setLeadFilter(active.id); setTab("leads"); }}>
-                      See leads{active.lead_count ? ` (${active.lead_count})` : ""}
-                    </button>
-                  </div>
-                  <p className="text-xs og-faint">Customers scan the code, fill a form that takes about 30 seconds, and you see their name, phone and location under Leads.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="og-card overflow-hidden">
-                <Placeholder icon={QrCode} title="Your QR code will appear here" sub="Create a campaign to get your link and QR" />
-              </div>
-            )}
-          </section>
-        </div>
-      )}
-
-      {/* ------------------------ Put QR on a design ----------------------- */}
-      {tab === "place" &&
-        (!active ? (
-          needCampaign
-        ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-            <section className="xl:col-span-2 flex flex-col gap-5 min-w-0">
-              <div>
-                <Label>Your design *</Label>
-                <UploadZone accept="application/pdf,image/*" file={designFile} onFile={onDesignFile} hint="PNG, JPG or PDF (first page)" />
-                {lastDesign && !designSrc && (
-                  <button className="og-ghost mt-3 w-full justify-center" onClick={() => openDesign(lastDesign)}>
-                    <Sparkles size={14} />
-                    Use the design I just made
-                  </button>
-                )}
-              </div>
-
-              <div>
-                <Label note="(optional)">Text under the QR</Label>
-                <input className="og-input" maxLength={22} value={caption} onChange={(e) => setCaption(e.target.value)} />
-              </div>
-
-              <div>
-                <Label>QR size</Label>
-                <input type="range" min={0.1} max={0.45} step={0.01} value={qr.size} onChange={(e) => place(qr.x, shownY, Number(e.target.value))} className="w-full" style={{ accentColor: "var(--accent)" }} aria-label="QR size" />
-                <p className="text-xs og-faint mt-1">Bigger scans easier from far away. Keep it away from important text.</p>
-              </div>
-
-              <div>
-                <Label>Jump to a corner</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {([["tl", "Top left"], ["tr", "Top right"], ["bl", "Bottom left"], ["br", "Bottom right"]] as [Corner, string][]).map(([c, label]) => (
-                    <button key={c} className="og-chip og-focus !rounded-xl !py-2.5" onClick={() => snap(c)} disabled={!designSrc}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <Btn icon={Download} onClick={downloadComposite} loading={composing} loadingText="Building image..." disabled={!designSrc || !qrUrl}>
-                Download design with QR
-              </Btn>
-            </section>
-
-            <section className="xl:col-span-3 min-w-0">
-              <div className="og-card overflow-hidden">
-                <div className="p-4 border-b og-divider flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold og-text">Preview</p>
-                  {designSrc && (
-                    <p className="text-xs og-faint flex items-center gap-1.5">
-                      <Move size={13} />
-                      Drag the QR to move it
-                    </p>
-                  )}
-                </div>
-                {designSrc && dims && qrUrl ? (
-                  <div className="p-4">
-                    <div
-                      ref={boxRef}
-                      className="relative select-none overflow-hidden rounded-2xl border og-divider mx-auto"
-                      // width is capped by height so the aspect ratio never distorts
-                      style={{ aspectRatio: `${dims.w} / ${dims.h}`, containerType: "inline-size", width: `min(100%, calc(75vh * ${ar}))` } as CSSProperties}
-                    >
-                      <img src={designSrc} alt="Your design" className="absolute inset-0 w-full h-full" draggable={false} />
-                      <div
-                        onPointerDown={onDown}
-                        onPointerMove={onMove}
-                        onPointerUp={onUp}
-                        onPointerCancel={onUp}
-                        className="absolute cursor-grab active:cursor-grabbing"
-                        style={{
-                          left: `${qr.x * 100}%`,
-                          top: `${shownY * 100}%`,
-                          width: `${qr.size * 100}cqw`,
-                          padding: `${qr.size * 7}cqw`,
-                          borderRadius: `${qr.size * 6}cqw`,
-                          boxSizing: "border-box",
-                          background: "#fff",
-                          boxShadow: "0 10px 30px -10px rgba(0,0,0,.45)",
-                          touchAction: "none",
-                        }}
-                      >
-                        <img src={qrUrl} alt="QR code" className="w-full block" draggable={false} />
-                        {capFrac > 0 && (
-                          <div className="flex items-center justify-center font-bold whitespace-nowrap overflow-hidden" style={{ height: `${qr.size * CAPTION_FRAC * 100}cqw`, fontSize: `${qr.size * 7}cqw`, color: "#0A2E1E" }}>
-                            {caption}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <Placeholder icon={ImageDown} title="Your design will appear here" sub="Upload a design, then drag the QR where you want it" />
-                )}
-              </div>
-            </section>
-          </div>
-        ))}
-
-      {/* ------------------------------ Leads ------------------------------ */}
-      {tab === "leads" &&
-        (campaigns.length === 0 ? (
-          needCampaign
-        ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
-              <div className="flex flex-col sm:flex-row gap-2 flex-1 max-w-2xl">
-                <select className="og-input sm:max-w-[220px]" value={leadFilter} onChange={(e) => setLeadFilter(e.target.value)} aria-label="Filter by campaign">
-                  <option value="all">All campaigns</option>
-                  {campaigns.map((c) => (
-                    <option key={c.id} value={c.id}>{c.business_name}</option>
-                  ))}
-                </select>
-                <div className="relative flex-1">
-                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 og-faint" />
-                  <input className="og-input" style={{ paddingLeft: "2.3rem" }} placeholder="Search name, phone or area" value={search} onChange={(e) => setSearch(e.target.value)} />
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button className="og-ghost" onClick={loadLeads} disabled={loadingLeads}>
-                  <RefreshCw size={14} className={loadingLeads ? "animate-spin" : ""} />
-                  Refresh
-                </button>
-                <button className="og-ghost" onClick={exportCsv} disabled={!filtered.length}>
-                  <Download size={14} />
-                  CSV
-                </button>
-                <Btn small icon={FileSpreadsheet} onClick={exportXlsx} disabled={!filtered.length}>
-                  Export to Excel
-                </Btn>
-              </div>
-            </div>
-
-            <p className="text-sm og-muted">
-              {loadingLeads ? "Loading..." : `${filtered.length} ${filtered.length === 1 ? "lead" : "leads"}`}
-            </p>
-
-            {!loadingLeads && filtered.length === 0 ? (
-              <div className="og-card overflow-hidden">
-                <Placeholder icon={Phone} title={leads.length ? "No leads match your search" : "No leads yet"} sub={leads.length ? "Try a different word" : "Put your QR on a design and share it. New leads show here."} />
-              </div>
-            ) : (
-              <ul className="flex flex-col gap-3">
-                {filtered.map((l) => {
-                  const map = mapLink(l);
-                  return (
-                    <li key={l.id} className="og-card p-4 flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-6" style={{ boxShadow: "none" }}>
-                      <div className="min-w-0 lg:w-56">
-                        <p className="font-semibold og-text truncate">{l.name}</p>
-                        <p className="text-sm og-muted">{l.phone}</p>
-                      </div>
-                      <div className="min-w-0 flex-1 text-sm">
-                        {(l.location_text || map) && (
-                          <p className="flex items-center gap-1.5 og-muted">
-                            <MapPin size={14} className="shrink-0 og-accent-text" />
-                            {map ? (
-                              <a href={map} target="_blank" rel="noreferrer" className="hover:underline truncate">
-                                {l.location_text || "Shared location"}{l.lat != null ? " (exact)" : ""}
-                              </a>
-                            ) : (
-                              <span className="truncate">{l.location_text}</span>
-                            )}
-                          </p>
-                        )}
-                        {l.interest && <span className="og-badge mt-2">{l.interest}</span>}
-                        {l.message && <p className="og-faint text-xs mt-2 line-clamp-2">{l.message}</p>}
-                      </div>
-                      <p className="text-xs og-faint lg:w-32 lg:text-right">{fmtDate(l.created_at)}</p>
-                      <div className="flex flex-wrap gap-2">
-                        <a className="og-ghost" href={`tel:${l.phone.replace(/\s/g, "")}`} aria-label={`Call ${l.name}`}>
-                          <Phone size={14} />
-                          Call
-                        </a>
-                        <a className="og-ghost" href={waLink(l.phone)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${l.name}`}>
-                          <MessageCircle size={14} />
-                          WhatsApp
-                        </a>
-                        <button className="og-ghost" onClick={() => removeLead(l.id)} aria-label={`Delete ${l.name}`} style={{ padding: ".5rem" }}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        ))}
-    </div>
-  );
-}
-
-
+ 
 export default function DashboardPage() {
   const { user: clerkUser } = useClerkUser();
   const { dbUser, setDbUser, refreshUser } = useUser();
@@ -1262,6 +623,9 @@ export default function DashboardPage() {
   const tool = TOOLS.find((t) => t.id === view);
   const toolId = tool?.id;
 
+  // Image Studio: which of its five tools is open
+  const [studioTool, setStudioTool] = useState<StudioToolId>("describe");
+
   // shared state
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -1286,6 +650,14 @@ export default function DashboardPage() {
   const [replaceText, setReplaceText] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // modern UI: command palette + celebration
+  const [palette, setPalette] = useState(false);
+  const [celebrateKey, setCelebrateKey] = useState(0);
+  useCommandK(() => setPalette(true));
+  useEffect(() => {
+    if (resultImage || pages.length) setCelebrateKey(Date.now());
+  }, [resultImage, pages.length]);
+
   const creditsLeft = dbUser?.credits_left ?? 0;
   const firstName = clerkUser?.firstName;
 
@@ -1305,6 +677,24 @@ export default function DashboardPage() {
     if (next !== "editor" && next !== "pdfToText") setText("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const openStudio = (id: StudioToolId) => {
+    setStudioTool(id);
+    goTo("studio");
+  };
+
+  const paletteItems: PaletteItem[] = [
+    { id: "home", label: "Home", hint: "Back to your dashboard", icon: LayoutDashboard, run: () => goTo("home") },
+    ...TOOLS.map((t) => ({ id: t.id, label: t.label, hint: t.blurb, icon: t.icon, run: () => goTo(t.id) })),
+    // each Image Studio tool is also searchable on its own
+    ...STUDIO_IDS.map((id) => ({
+      id: `studio-${id}`,
+      label: `Image Studio: ${STUDIO_LABELS[id]}`,
+      hint: STUDIO_COSTS[id] === 0 ? "Free" : `${STUDIO_COSTS[id]} credits`,
+      icon: Wand2,
+      run: () => openStudio(id),
+    })),
+  ];
 
   const pickTemplate = (t: Template) => {
     setActiveTemplate(t.id);
@@ -1478,33 +868,30 @@ export default function DashboardPage() {
   /* ------------------------------- views --------------------------------- */
 
   const needsCredits = !!tool && tool.cost > 0 && creditsLeft < tool.cost;
-  const costLabel = !tool ? "" : tool.cost === 0 ? "Free" : `${tool.cost} ${tool.cost === 1 ? "credit" : "credits"}`;
+  const costLabel = !tool ? "" : toolBadge(tool);
 
   const renderHome = () => (
     <div className="flex flex-col gap-10 og-in">
-      {/* Welcome */}
-      <section className="og-card p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6 justify-between">
-        <div className="max-w-xl">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold og-text">
-            {firstName ? `Oga ${firstName}, what you dey design today?` : "Oga, what you dey design today?"}
-          </h1>
-          <p className="og-muted text-sm sm:text-base mt-2">
-            Make a logo, fix a certificate, remove a background or turn a PDF into text. Pick a tool, or start from a template below.
-          </p>
-        </div>
-        <div className="sm:w-64 shrink-0">
-          <Btn icon={Sparkles} onClick={() => goTo("design")}>
-            Start a new design
-          </Btn>
-        </div>
+      {/* Hero */}
+      <HeroBanner
+        name={firstName}
+        onStart={() => goTo("design")}
+        onOpenPalette={() => setPalette(true)}
+        art={[<TemplateArt key="a" t={TEMPLATES[2]} />, <TemplateArt key="b" t={TEMPLATES[0]} />, <TemplateArt key="c" t={TEMPLATES[4]} />]}
+      />
+
+      {/* Live stats + ideas */}
+      <section className="flex flex-col gap-4">
+        <StatsStrip credits={creditsLeft} tools={TOOLS.length} freeTools={TOOLS.filter((t) => t.cost === 0 && !t.note).length} />
+        <IdeaMarquee items={["Barbershop flyer", "Restaurant promo", "Tech logo", "Wedding certificate", "Church programme", "Makeup artist card", "Sales poster", "Event flyer", "Business card"]} />
       </section>
 
       {/* Tools */}
       <section>
         <h2 className="text-lg font-bold og-text mb-4">Your tools</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 og-stagger">
           {TOOLS.map((t) => (
-            <button key={t.id} onClick={() => goTo(t.id)} className="og-card og-lift og-focus text-left p-5 flex flex-col gap-4">
+            <SpotlightCard key={t.id} onClick={() => goTo(t.id)} className="text-left p-5 flex flex-col gap-4">
               <div className="flex items-start justify-between">
                 <div className="og-tile w-12 h-12 rounded-2xl">
                   <t.icon size={22} />
@@ -1515,10 +902,10 @@ export default function DashboardPage() {
                 <p className="font-semibold og-text">{t.label}</p>
                 <p className="text-sm og-muted mt-1">{t.blurb}</p>
               </div>
-              <span className="og-badge self-start" data-free={t.cost === 0} data-paid={t.cost > 0}>
-                {t.cost === 0 ? "Free" : `${t.cost} ${t.cost === 1 ? "credit" : "credits"}`}
+              <span className="og-badge self-start" data-free={t.cost === 0 && !t.note} data-paid={t.cost > 0 || !!t.note}>
+                {toolBadge(t)}
               </span>
-            </button>
+            </SpotlightCard>
           ))}
         </div>
       </section>
@@ -1731,6 +1118,9 @@ export default function DashboardPage() {
             )}
           </>
         );
+
+      default:
+        return null;
     }
   };
 
@@ -1829,7 +1219,7 @@ export default function DashboardPage() {
         ) : resultImage ? (
           <>
             <div className={isCutout ? "og-checker" : ""}>
-              <img src={resultImage} alt="Result" className={`w-full aspect-square block og-in ${isCutout ? "object-contain" : "object-cover"}`} />
+              <img src={resultImage} alt="Result" className={`w-full aspect-square block og-reveal ${isCutout ? "object-contain" : "object-cover"}`} />
             </div>
             <div className="p-4 flex gap-3 border-t og-divider">
               <div className="flex-1">
@@ -1851,6 +1241,51 @@ export default function DashboardPage() {
 
   const renderTool = () => {
     if (!tool) return null;
+
+    if (toolId === "studio") {
+      return (
+        <div className="flex flex-col gap-8 og-in">
+          <div>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold og-text">{tool.label}</h1>
+            <p className="og-muted text-sm mt-1">{tool.blurb}.</p>
+          </div>
+
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Image Studio tools">
+            {STUDIO_IDS.map((id) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={studioTool === id}
+                data-active={studioTool === id}
+                onClick={() => setStudioTool(id)}
+                className="og-chip og-focus !py-2 !px-4 !text-sm"
+              >
+                {STUDIO_LABELS[id]}
+                <span className="opacity-70"> · {STUDIO_COSTS[id] === 0 ? "Free" : `${STUDIO_COSTS[id]} cr`}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* key resets a tool when you switch tabs; remove it if you want each tab to keep its upload */}
+          <ImageStudio
+            key={studioTool}
+            tool={studioTool}
+            ctx={{
+              creditsLeft,
+              charge,
+              refund,
+              onUseBrief: (b) => {
+                setDesignType(b.type);
+                setDescription(b.description);
+                setActiveTemplate(null);
+                goTo("design");
+              },
+            }}
+          />
+        </div>
+      );
+    }
+
     if (toolId === "leads") {
       return (
         <div className="flex flex-col gap-8 og-in">
@@ -1862,6 +1297,31 @@ export default function DashboardPage() {
         </div>
       );
     }
+
+        if (toolId === "events") {
+      return (
+        <div className="flex flex-col gap-8 og-in">
+          <div>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold og-text">{tool.label}</h1>
+            <p className="og-muted text-sm mt-1">{tool.blurb}.</p>
+          </div>
+          <EventsTool lastDesign={lastDesign} />
+        </div>
+      );
+    }
+
+    if (toolId === "booking") {
+      return (
+        <div className="flex flex-col gap-8 og-in">
+          <div>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold og-text">{tool.label}</h1>
+            <p className="og-muted text-sm mt-1">{tool.blurb}.</p>
+          </div>
+          <BookingTool lastDesign={lastDesign} />
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col gap-8 og-in">
         <div>
@@ -1923,8 +1383,11 @@ export default function DashboardPage() {
 
   return (
     <div className="og-root" data-theme={theme}>
-      <style>{STYLES}</style>
-      <div className="og-glow" aria-hidden />
+      <style>{STYLES}{MODERN_STYLES}</style>
+      <Aurora />
+      <ScrollProgress />
+      <Celebrate trigger={resultImage || pages.length ? celebrateKey : 0} />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} items={paletteItems} />
 
       {/* Header */}
       <header className="og-header sticky top-0 z-40">
@@ -1939,6 +1402,10 @@ export default function DashboardPage() {
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <button className="og-ghost og-focus" onClick={() => setPalette(true)} aria-label="Search tools">
+              <Search size={14} />
+              <span className="hidden sm:block">Search</span>
+            </button>
             <ThemeSwitch theme={theme} onToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} />
             <Link to="/history" className="og-ghost">
               <History size={15} />
@@ -1990,8 +1457,8 @@ export default function DashboardPage() {
                         <t.icon size={16} />
                       </span>
                       <span className="flex-1">{t.label}</span>
-                      <span className="text-[11px]" style={{ color: t.cost === 0 ? "#10b981" : "var(--faint)" }}>
-                        {t.cost === 0 ? "Free" : t.cost}
+                      <span className="text-[11px]" style={{ color: t.cost === 0 && !t.note ? "#10b981" : "var(--faint)" }}>
+                        {sideLabel(t)}
                       </span>
                     </button>
                   ))}
