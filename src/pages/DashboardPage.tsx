@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import { useUser as useClerkUser, UserButton } from "@clerk/clerk-react";
-
+import type { RecentImage } from "../components/ImagePicker";
 import { Link } from "react-router-dom";
 import {
   Zap,
@@ -47,7 +47,7 @@ import {
   type PaletteItem,
 } from "../components/ModernUI";
 import EventsTool from "../components/EventsTool";
- import LeadsTool from "../components/LeadsTool";
+import LeadsTool from "../components/LeadsTool";
 import BookingTool from "../components/BookingTool";
 /* -------------------------------------------------------------------------- */
 /*  Theme + component styles (scoped to .og-root, no Tailwind config needed)   */
@@ -175,12 +175,11 @@ const TOOLS: Tool[] = [
   { id: "booking", label: "Bookings", blurb: "Create a QR so customers can pick a day and time to book you", icon: CalendarClock, cost: 0, group: "Grow" },
 ];
 const GROUPS = ["Create", "Image tools", "Grow", "Fix and clean up", "PDF and documents"];
-
 const STUDIO_LABELS: Record<StudioToolId, string> = {
   describe: "Describe",
   upscale: "Upscale",
-  resize: "Resize",
-  layerize: "Split text",
+  sharpen: "Sharpen",
+  layerize: "Edit text",
   vectorize: "To SVG",
 };
 
@@ -600,6 +599,17 @@ function TemplateGallery({
 export default function DashboardPage() {
   const { user: clerkUser } = useClerkUser();
   const { dbUser, setDbUser, refreshUser } = useUser();
+  const [recent, setRecent] = useState<RecentImage[]>([]);
+
+const addRecent = (url: string, label: string) => {
+  setRecent((prev) => {
+    const updated = [
+      { id: `${Date.now()}-${Math.random()}`, url, label },
+      ...prev.filter((item) => item.url !== url),
+    ];
+    return updated.slice(0, 12);
+  });
+};
 
   // theme (saved on the device)
   const [theme, setTheme] = useState<"dark" | "light">(() => {
@@ -1268,20 +1278,22 @@ export default function DashboardPage() {
 
           {/* key resets a tool when you switch tabs; remove it if you want each tab to keep its upload */}
           <ImageStudio
-            key={studioTool}
-            tool={studioTool}
-            ctx={{
-              creditsLeft,
-              charge,
-              refund,
-              onUseBrief: (b) => {
-                setDesignType(b.type);
-                setDescription(b.description);
-                setActiveTemplate(null);
-                goTo("design");
-              },
-            }}
-          />
+  key={studioTool}
+  tool={studioTool}
+  ctx={{
+    creditsLeft,
+    charge,
+    refund,
+    onUseBrief: (b) => {
+      setDesignType(b.type);
+      setDescription(b.description);
+      setActiveTemplate(null);
+      goTo("design");
+    },
+    recent,
+    addRecent,
+  }}
+/>
         </div>
       );
     }
