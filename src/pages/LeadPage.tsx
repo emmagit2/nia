@@ -187,6 +187,10 @@ const CSS = `
 .lp-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:12px;font-weight:500;color:var(--ink)}
 .lp-dot{width:7px;height:7px;border-radius:50%;background:#35E08A;box-shadow:0 0 0 4px rgba(53,224,138,.2)}
 .lp-cta-row{display:flex;gap:10px;margin-top:24px}
+.lp-follow{display:flex;align-items:center;gap:10px;margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.lp-follow>span{font-size:12px;font-weight:500;color:var(--muted);margin-right:2px}
+.lp-follow a{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:#fff;border:1px solid var(--line);color:var(--ink);box-shadow:0 8px 18px -12px rgba(11,31,23,.4);transition:transform .15s,background .15s,color .15s}
+.lp-follow a:hover{background:var(--deep);color:#fff;transform:translateY(-2px)}
 .lp-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:52px;padding:0 24px;border-radius:18px;border:0;font-size:14.5px;font-weight:600;transition:transform .15s,box-shadow .15s}
 .lp-btn:active{transform:scale(.97)}
 .lp-btn-accent{flex:1;background:var(--accent);color:var(--on);box-shadow:0 12px 28px -8px var(--accent)}
@@ -499,6 +503,17 @@ export default function LeadPage() {
                   </a>
                 )}
               </div>
+
+              {socials.length > 0 && (
+                <div className="lp-follow">
+                  <span>Follow us</span>
+                  {socials.map(([kind, val]) => (
+                    <a key={kind} href={socialUrl(kind, val!)} target="_blank" rel="noopener noreferrer" aria-label={SOCIAL_NAME[kind]} title={SOCIAL_NAME[kind]}>
+                      <SocialIcon kind={kind} />
+                    </a>
+                  ))}
+                </div>
+              )}
             </header>
 
             {/* ---------------- BODY ---------------- */}
