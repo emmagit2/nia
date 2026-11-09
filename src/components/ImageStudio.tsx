@@ -192,9 +192,17 @@ function usePaid(ctx: StudioCtx, cost: number) {
 
 const TYPE_WORDS: Record<DesignTypeName, string[]> = {
   Logo: ["logo", "emblem", "icon", "monogram", "wordmark", "brand mark", "symbol", "badge"],
-  Flyer: ["flyer", "poster", "promo", "sale", "grand opening", "event", "invitation", "brochure", "banner", "discount", "offer"],
-  "Social Post": ["instagram", "social media", "post", "story", "feed", "square", "carousel", "tiktok"],
   "Business Card": ["business card", "contact details", "name card", "visiting card", "business-card"],
+  Flyer: ["flyer", "promo", "sale", "grand opening", "event", "brochure", "discount", "offer"],
+  Poster: ["poster", "concert", "gig", "movie", "print poster"],
+  Invitation: ["invitation", "invite", "wedding", "rsvp", "save the date", "birthday party"],
+  Menu: ["menu", "dishes", "starters", "desserts", "price list", "appetizer"],
+  Banner: ["banner", "roll-up", "billboard", "signage", "wide banner"],
+  "Social Post": ["instagram", "social media", "post", "feed", "square", "carousel"],
+  Story: ["story", "stories", "status", "reel", "vertical", "whatsapp status"],
+  "Facebook Cover": ["facebook cover", "cover photo", "page cover", "facebook page"],
+  "YouTube Thumbnail": ["youtube", "thumbnail", "video", "vlog"],
+  Custom: [],
 };
 
 const CATEGORY_WORDS: Record<string, string[]> = {
@@ -236,7 +244,7 @@ function pickBest(text: string, table: Record<string, string[]>, fallback: strin
   return best;
 }
 
-const DESIGN_TYPES = Object.keys(TYPE_WORDS) as DesignTypeName[];
+const DESIGN_TYPES = (Object.keys(TYPE_WORDS) as DesignTypeName[]).filter((t) => t !== "Custom");
 const CATEGORIES = Object.keys(CATEGORY_WORDS);
 const STYLES = Object.keys(STYLE_WORDS);
 

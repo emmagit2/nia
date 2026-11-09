@@ -269,6 +269,6 @@ export default function EventPageSettings({
           </div>
         </div>
       </section>
-    </div>
+    </div> 
   );
 }
