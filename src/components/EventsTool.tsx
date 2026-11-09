@@ -1,38 +1,57 @@
- import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import axios from "axios";
 import { CalendarDays, Check, Copy, Download, ImageDown, Lock, MessageCircle, Phone, QrCode, RefreshCw, Search, Unlock, Users } from "lucide-react";
 import FieldBuilder, { type CustomField } from "./FieldBuilder";
 import QrOnDesign from "./QrOnDesign";
-import { Label, dataUrlToBlob, saveBlob, waLink } from "./toolUtils";
+import EventPageSettings from "./EventPageSettings";
 
 /* Event registration tool for DashboardPage. Uses the og-* styles that DashboardPage already defines. */
 
 interface EventRow {
   id: string; slug: string; title: string; host_name: string; date: string; start_time: string;
-  venue_name: string; capacity: number | null; registration_open: boolean; headcount: number; registrations: number;
-  custom_fields: CustomField[];
+  venue_name: string; capacity: number | null; registration_open: boolean; headcount: number; registrations: number; custom_fields: CustomField[]; visibility: "public" | "private"; access_code: string;
 }
 interface Reg {
   id: string; name: string; phone: string; email: string; guests: number; message: string;
-  answers: Record<string, string>;
-  status: "confirmed" | "waitlist" | "cancelled"; code: string; created_at: string;
+  status: "confirmed" | "waitlist" | "cancelled"; code: string; created_at: string; answers: Record<string, string>;
 }
-type Tab = "create" | "place" | "guests";
+type Tab = "create" | "page" | "place" | "guests";
 
 const blank = {
   title: "", host_name: "", date: "", start_time: "", end_time: "", venue_name: "", venue_address: "",
   map_link: "", capacity: "", max_guests_per_registration: "1", deadline: "", description: "",
 };
 
+const waLink = (phone: string) => {
+  let d = phone.replace(/\D/g, "");
+  if (d.startsWith("0") && d.length === 11) d = "234" + d.slice(1);
+  return `https://wa.me/${d}`;
+};
+
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-NG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 const prettyDate = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-NG", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
+function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function Label({ children, note }: { children: ReactNode; note?: string }) {
+  return (
+    <label className="block text-sm font-semibold og-text mb-2">
+      {children}
+      {note && <span className="og-faint font-normal"> {note}</span>}
+    </label>
+  );
+}
+
 export default function EventsTool({ lastDesign = null }: { lastDesign?: string | null }) {
   const { getToken } = useAuth();
-  const tokenFn = useRef(getToken);
-  tokenFn.current = getToken;
-
   const [tab, setTab] = useState<Tab>("create");
   const [events, setEvents] = useState<EventRow[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -47,13 +66,20 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
   const [q, setQ] = useState("");
 
   const active = events.find((e) => e.id === activeId) ?? null;
-  const link = active ? `${window.location.origin}/e/${active.slug}` : "";
+  // private events: the QR carries the invite code, so invited guests who scan it go straight in
+  const link = active ? `${window.location.origin}/e/${active.slug}${active.visibility === "private" && active.access_code ? `?code=${active.access_code}` : ""}` : "";
 
-  const api = useCallback(async <T,>(method: "get" | "post" | "patch", url: string, data?: unknown, blob?: boolean): Promise<T> => {
-    const token = await tokenFn.current();
-    const res = await axios.request<T>({ method, url, data, headers: { Authorization: `Bearer ${token}` }, responseType: blob ? "blob" : "json" });
-    return res.data;
-  }, []);
+  // keep the latest getToken in a ref so `api` never changes between renders
+  const tokenFn = useRef(getToken);
+  tokenFn.current = getToken;
+  const api = useCallback(
+    async <T,>(method: "get" | "post" | "patch", url: string, data?: unknown, blob?: boolean): Promise<T> => {
+      const token = await tokenFn.current();
+      const res = await axios.request<T>({ method, url, data, headers: { Authorization: `Bearer ${token}` }, responseType: blob ? "blob" : "json" });
+      return res.data;
+    },
+    [],
+  );
 
   const loadEvents = useCallback(async () => {
     const d = await api<{ events?: EventRow[] }>("get", "/api/events");
@@ -64,10 +90,11 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
 
   useEffect(() => {
     loadEvents()
-      .then((l) => setActiveId((id) => id ?? l[0]?.id ?? null))
+      .then((list) => setActiveId((id) => id ?? list[0]?.id ?? null))
       .catch(() => setErr("Could not reach the server. Run the app with netlify dev (not npm run dev), then refresh."));
   }, [loadEvents]);
 
+  // QR image for the active event
   useEffect(() => {
     if (!link) return setQrUrl(null);
     let live = true;
@@ -102,6 +129,7 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
       const d = await api<{ event: EventRow }>("post", "/api/events", { ...form, custom_fields: fields });
       setEvents((l) => [d.event, ...l]);
       setActiveId(d.event.id);
+      setTab("page"); // next step: set the logo, cover and who can see it
       setForm(blank);
       setFields([]);
     } catch (e) {
@@ -149,23 +177,15 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
 
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return t ? regs.filter((r) => [r.name, r.phone, r.code].some((v) => (v ?? "").toLowerCase().includes(t))) : regs;
+    return t ? regs.filter((r) => [r.name, r.phone, r.code].some((v) => v.toLowerCase().includes(t))) : regs;
   }, [regs, q]);
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "create", label: "Create event" },
+    { id: "page", label: "Event page" },
     { id: "place", label: "Put QR on a design" },
     { id: "guests", label: "Guests" },
   ];
-
-  const needEvent = (
-    <div className="og-card p-8 text-center">
-      <div className="og-tile w-14 h-14 rounded-2xl mx-auto mb-4"><CalendarDays size={26} /></div>
-      <p className="font-semibold og-text mb-1">Create an event first</p>
-      <p className="text-sm og-muted mb-5">Guests who register through your QR will show up here.</p>
-      <button className="og-ghost" onClick={() => setTab("create")}>Go to Create event</button>
-    </div>
-  );
 
   return (
     <div className="flex flex-col gap-6 og-in">
@@ -178,7 +198,9 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
       </div>
 
       {err && (
-        <div role="alert" className="rounded-2xl p-4 text-sm border" style={{ background: "rgba(239,68,68,.08)", borderColor: "rgba(239,68,68,.3)", color: "#ef4444" }}>{err}</div>
+        <div role="alert" className="rounded-2xl p-4 text-sm border" style={{ background: "rgba(239,68,68,.08)", borderColor: "rgba(239,68,68,.3)", color: "#ef4444" }}>
+          {err}
+        </div>
       )}
 
       {tab === "create" && (
@@ -235,7 +257,17 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
               <FieldBuilder value={fields} onChange={setFields} />
             </div>
             <button className="og-btn" onClick={create} disabled={busy || !form.title.trim() || !form.date}>
-              {busy ? (<><span className="og-spin" />Creating...</>) : (<><span className="og-btn-icon"><CalendarDays size={16} /></span>Create event and QR</>)}
+              {busy ? (
+                <>
+                  <span className="og-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <span className="og-btn-icon"><CalendarDays size={16} /></span>
+                  Create event and QR
+                </>
+              )}
             </button>
           </section>
 
@@ -243,7 +275,9 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
             {events.length > 1 && (
               <div className="flex flex-wrap gap-2">
                 {events.map((e) => (
-                  <button key={e.id} className="og-chip og-focus" data-active={e.id === activeId} onClick={() => setActiveId(e.id)}>{e.title}</button>
+                  <button key={e.id} className="og-chip og-focus" data-active={e.id === activeId} onClick={() => setActiveId(e.id)}>
+                    {e.title}
+                  </button>
                 ))}
               </div>
             )}
@@ -262,18 +296,33 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
                       {prettyDate(active.date)}{active.venue_name ? `, ${active.venue_name}` : ""}
                     </p>
                     <p className="text-sm og-faint mt-1">
-                      {active.headcount}{active.capacity ? ` of ${active.capacity}` : ""} attending &middot; {active.registration_open ? "Registration open" : "Registration closed"}
+                      {active.headcount}{active.capacity ? ` of ${active.capacity}` : ""} attending &middot; {active.registration_open ? "Registration open" : "Registration closed"} &middot; {active.visibility === "private" ? `Private, code ${active.access_code}` : "Public"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 og-input" style={{ padding: ".5rem .5rem .5rem .9rem" }}>
                     <span className="text-sm og-muted truncate flex-1">{link}</span>
-                    <button onClick={copyLink} className="og-ghost shrink-0">{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button>
+                    <button onClick={copyLink} className="og-ghost shrink-0">
+                      {copied ? <Check size={14} /> : <Copy size={14} />}
+                      {copied ? "Copied" : "Copy"}
+                    </button>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button className="og-ghost" onClick={() => setTab("place")}><ImageDown size={14} />Put it on a design</button>
-                    <button className="og-ghost" disabled={!qrUrl} onClick={() => qrUrl && saveBlob(dataUrlToBlob(qrUrl), `twomindesign_event_${active.slug}.png`)}><Download size={14} />Download QR</button>
-                    <button className="og-ghost" onClick={() => setTab("guests")}><Users size={14} />See guests ({active.registrations})</button>
-                    <button className="og-ghost" onClick={toggleOpen}>{active.registration_open ? <Lock size={14} /> : <Unlock size={14} />}{active.registration_open ? "Close registration" : "Reopen registration"}</button>
+                    <button className="og-ghost" onClick={() => setTab("place")}>
+                      <ImageDown size={14} />
+                      Put it on a design
+                    </button>
+                    <button className="og-ghost" disabled={!qrUrl} onClick={() => qrUrl && saveBlob(dataUrlToBlob(qrUrl), `twomindesign_event_${active.slug}.png`)}>
+                      <Download size={14} />
+                      Download QR
+                    </button>
+                    <button className="og-ghost" onClick={() => setTab("guests")}>
+                      <Users size={14} />
+                      See guests ({active.registrations})
+                    </button>
+                    <button className="og-ghost" onClick={toggleOpen}>
+                      {active.registration_open ? <Lock size={14} /> : <Unlock size={14} />}
+                      {active.registration_open ? "Close registration" : "Reopen registration"}
+                    </button>
                   </div>
                   <p className="text-xs og-faint">Print the QR on your invitation or flyer. Guests scan it, register in under a minute, and get a confirmation code.</p>
                 </div>
@@ -291,17 +340,46 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
         </div>
       )}
 
-      {tab === "place" && (!active ? needEvent : <QrOnDesign link={link} defaultCaption="Scan to register" lastDesign={lastDesign} />)}
+      {tab === "page" &&
+        (!active ? (
+          <div className="og-card p-8 text-center">
+            <div className="og-tile w-14 h-14 rounded-2xl mx-auto mb-4"><QrCode size={26} /></div>
+            <p className="font-semibold og-text mb-1">Create an event first</p>
+            <p className="text-sm og-muted mb-5">Then you can add your logo, cover and host details.</p>
+            <button className="og-ghost" onClick={() => setTab("create")}>Go to Create event</button>
+          </div>
+        ) : (
+          <EventPageSettings key={active.id} eventId={active.id} title={active.title} api={api} onSaved={() => { void loadEvents(); }} />
+        ))}
+
+      {tab === "place" &&
+        (!active ? (
+          <div className="og-card p-8 text-center">
+            <div className="og-tile w-14 h-14 rounded-2xl mx-auto mb-4"><QrCode size={26} /></div>
+            <p className="font-semibold og-text mb-1">Create an event first</p>
+            <p className="text-sm og-muted mb-5">Then you can put its QR on your flyer or invitation.</p>
+            <button className="og-ghost" onClick={() => setTab("create")}>Go to Create event</button>
+          </div>
+        ) : (
+          <QrOnDesign link={link} defaultCaption="Scan to register" lastDesign={lastDesign} />
+        ))}
 
       {tab === "guests" &&
         (!active ? (
-          needEvent
+          <div className="og-card p-8 text-center">
+            <div className="og-tile w-14 h-14 rounded-2xl mx-auto mb-4"><CalendarDays size={26} /></div>
+            <p className="font-semibold og-text mb-1">Create an event first</p>
+            <p className="text-sm og-muted mb-5">Guests who register through your QR will show up here.</p>
+            <button className="og-ghost" onClick={() => setTab("create")}>Go to Create event</button>
+          </div>
         ) : (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
               <div className="flex flex-col sm:flex-row gap-2 flex-1 max-w-2xl">
                 <select className="og-input sm:max-w-[240px]" value={activeId ?? ""} onChange={(e) => setActiveId(e.target.value)} aria-label="Choose event">
-                  {events.map((e) => (<option key={e.id} value={e.id}>{e.title}</option>))}
+                  {events.map((e) => (
+                    <option key={e.id} value={e.id}>{e.title}</option>
+                  ))}
                 </select>
                 <div className="relative flex-1">
                   <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 og-faint" />
@@ -309,9 +387,18 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button className="og-ghost" onClick={loadRegs} disabled={loadingRegs}><RefreshCw size={14} className={loadingRegs ? "animate-spin" : ""} />Refresh</button>
-                <button className="og-ghost" onClick={toggleOpen}>{active.registration_open ? <Lock size={14} /> : <Unlock size={14} />}{active.registration_open ? "Close registration" : "Reopen"}</button>
-                <button className="og-ghost" onClick={exportCsv} disabled={!regs.length}><Download size={14} />Export CSV</button>
+                <button className="og-ghost" onClick={loadRegs} disabled={loadingRegs}>
+                  <RefreshCw size={14} className={loadingRegs ? "animate-spin" : ""} />
+                  Refresh
+                </button>
+                <button className="og-ghost" onClick={toggleOpen}>
+                  {active.registration_open ? <Lock size={14} /> : <Unlock size={14} />}
+                  {active.registration_open ? "Close registration" : "Reopen"}
+                </button>
+                <button className="og-ghost" onClick={exportCsv} disabled={!regs.length}>
+                  <Download size={14} />
+                  Export CSV
+                </button>
               </div>
             </div>
 
@@ -342,7 +429,9 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
                       <span className="og-badge font-mono">{r.code}</span>
                       {r.message && <p className="og-faint text-xs w-full line-clamp-2">{r.message}</p>}
                       {(active.custom_fields || []).map((f) =>
-                        r.answers?.[f.id] ? <p key={f.id} className="og-faint text-xs w-full"><span className="og-muted">{f.label}:</span> {r.answers[f.id]}</p> : null,
+                        r.answers?.[f.id] ? (
+                          <p key={f.id} className="og-faint text-xs w-full"><span className="og-muted">{f.label}:</span> {r.answers[f.id]}</p>
+                        ) : null,
                       )}
                     </div>
                     <p className="text-xs og-faint lg:w-32 lg:text-right">{fmt(r.created_at)}</p>
@@ -360,4 +449,12 @@ export default function EventsTool({ lastDesign = null }: { lastDesign?: string 
         ))}
     </div>
   );
+}
+
+function dataUrlToBlob(url: string): Blob {
+  const [head, b64] = url.split(",");
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: head.match(/:(.*?);/)?.[1] ?? "image/png" });
 }

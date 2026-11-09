@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+ import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 
 /* ---- helpers (kept in this file so no shared folder is needed) ---- */
@@ -29,40 +29,87 @@ async function readBody(req: Request, max = 20000): Promise<Record<string, any> 
     return null;
   }
 }
+
+/** Checks the guest's answers to the organizer's extra questions. Returns the clean answers, or an error message. */
+function cleanAnswers(fields: any[] | null, raw: unknown): Record<string, string> | string {
+  const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const out: Record<string, string> = {};
+  for (const f of fields || []) {
+    const v = clean(src[f.id], f.type === "textarea" ? 300 : 120);
+    if (!v) {
+      if (f.required) return `${f.label} is required.`;
+      continue;
+    }
+    if (f.type === "phone" && v.replace(/\D/g, "").length < 7) return `Enter a valid ${String(f.label).toLowerCase()}.`;
+    if (f.type === "email" && !/^\S+@\S+\.\S+$/.test(v)) return `Enter a valid ${String(f.label).toLowerCase()}.`;
+    if (f.type === "number" && !/^-?\d+(\.\d+)?$/.test(v)) return `${f.label} must be a number.`;
+    if (f.type === "select" && !(f.options || []).includes(v)) return `Pick a valid option for ${f.label}.`;
+    out[f.id] = v;
+  }
+  return out;
+}
 /* ---- end helpers ---- */
 
 export const config = { path: "/api/public/event/*" };
 
-// GET  /api/public/event/:slug            -> event details + spots left (no login)
-// POST /api/public/event/:slug/register   -> register a guest (no login)
+const COLS = "id, slug, title, description, host_name, host_about, host_whatsapp, host_instagram, logo_url, cover_url, brand_color, visibility, access_code, event_date, start_time, end_time, venue_name, venue_address, map_link, capacity, max_guests, deadline, registration_open, custom_fields";
+
+// GET  /api/public/event/:slug[?code=INVITE]   -> event page (private events stay locked until the code is right)
+// POST /api/public/event/:slug/register        -> register a guest
 export default async (req: Request) => {
   try {
-    const seg = new URL(req.url).pathname.split("/").filter(Boolean).map(decodeURIComponent);
+    const url = new URL(req.url);
+    const seg = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
     const slug = seg[3];
     const action = seg[4];
     if (!slug) return json({ error: "Event not found" }, 404);
 
-    const { data: e } = await supabase
-      .from("events")
-      .select("id, slug, title, description, host_name, event_date, start_time, end_time, venue_name, venue_address, map_link, capacity, max_guests, deadline, registration_open")
-      .eq("slug", slug)
-      .maybeSingle();
+    const { data: e } = await supabase.from("events").select(COLS).eq("slug", slug).maybeSingle();
     if (!e) return json({ error: "Event not found" }, 404);
+
+    const ip = req.headers.get("x-nf-client-connection-ip") || req.headers.get("x-forwarded-for") || "unknown";
+    const ip_hash = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 32);
 
     const today = new Date().toLocaleDateString("en-CA", { timeZone: TZ }); // YYYY-MM-DD
     const closed = !e.registration_open || (!!e.deadline && today > e.deadline);
+    const isPrivate = e.visibility === "private";
 
-    const { data: rows } = await supabase
-      .from("event_registrations").select("guests").eq("event_id", e.id).eq("status", "confirmed");
-    const taken = (rows || []).reduce((s, r) => s + r.guests, 0);
+    /** "ok" = may see everything. Wrong guesses are counted: 10 per 10 minutes, then blocked. */
+    const checkCode = async (given: unknown): Promise<"ok" | "none" | "wrong" | "blocked"> => {
+      if (!isPrivate) return "ok";
+      const c = clean(given, 30).toUpperCase();
+      if (!c) return "none";
+      const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { count } = await supabase
+        .from("event_unlock_attempts").select("id", { count: "exact", head: true }).eq("ip_hash", ip_hash).gte("created_at", since);
+      if ((count || 0) >= 10) return "blocked";
+      if (e.access_code && c === String(e.access_code).toUpperCase()) return "ok";
+      await supabase.from("event_unlock_attempts").insert({ ip_hash });
+      return "wrong";
+    };
+
+    // what everyone may see, even on a private event
+    const base = {
+      title: e.title, host_name: e.host_name, logo_url: e.logo_url, cover_url: e.cover_url,
+      brand_color: e.brand_color, visibility: e.visibility, date: e.event_date,
+    };
 
     if (req.method === "GET" && !action) {
+      const status = await checkCode(url.searchParams.get("code"));
+      if (status === "blocked") return json({ error: "Too many wrong codes. Try again in a few minutes." }, 429);
+      if (status !== "ok") return json({ event: { ...base, locked: true, wrong_code: status === "wrong" } });
+
+      const { data: rows } = await supabase
+        .from("event_registrations").select("guests").eq("event_id", e.id).eq("status", "confirmed");
+      const taken = (rows || []).reduce((s, r) => s + r.guests, 0);
+
       return json({
         event: {
-          title: e.title, description: e.description, host_name: e.host_name,
-          date: e.event_date, start_time: e.start_time?.slice(0, 5) ?? "", end_time: e.end_time?.slice(0, 5) ?? "",
+          ...base, locked: false,
+          description: e.description, host_about: e.host_about, host_whatsapp: e.host_whatsapp, host_instagram: e.host_instagram,
+          start_time: e.start_time?.slice(0, 5) ?? "", end_time: e.end_time?.slice(0, 5) ?? "",
           venue_name: e.venue_name, venue_address: e.venue_address, map_link: e.map_link,
-          max_guests_per_registration: e.max_guests, closed,
+          max_guests_per_registration: e.max_guests, closed, custom_fields: e.custom_fields ?? [],
           spots_left: e.capacity === null ? null : Math.max(0, e.capacity - taken),
         },
       });
@@ -72,6 +119,10 @@ export default async (req: Request) => {
       const body = await readBody(req);
       if (!body) return json({ error: "Invalid request." }, 400);
       if (clean(body.website, 50)) return json({ ok: true }); // honeypot: pretend it worked
+
+      const status = await checkCode(body.code);
+      if (status === "blocked") return json({ error: "Too many wrong codes. Try again in a few minutes." }, 429);
+      if (status !== "ok") return json({ error: "The invite code is not correct." }, 403);
 
       if (closed) return json({ error: "Registration is closed for this event." }, 400);
 
@@ -83,10 +134,10 @@ export default async (req: Request) => {
       const guests = Math.min(Math.max(parseInt(body.guests, 10) || 1, 1), e.max_guests);
       if (!name) return json({ error: "Please enter your name." }, 400);
       if (digits.length < 7) return json({ error: "Enter a valid phone number." }, 400);
+      const answers = cleanAnswers(e.custom_fields, body.answers);
+      if (typeof answers === "string") return json({ error: answers }, 400);
 
       // rate limit: 8 registrations per 10 minutes per visitor (stored as a hash, never the raw IP)
-      const ip = req.headers.get("x-nf-client-connection-ip") || req.headers.get("x-forwarded-for") || "unknown";
-      const ip_hash = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 32);
       const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
       const { count } = await supabase
         .from("event_registrations").select("id", { count: "exact", head: true })
@@ -97,7 +148,7 @@ export default async (req: Request) => {
         const code = crypto.randomBytes(3).toString("hex").toUpperCase();
         const { data, error } = await supabase.rpc("register_for_event", {
           p_event_id: e.id, p_name: name, p_phone: phone, p_digits: digits, p_email: email,
-          p_guests: guests, p_message: message, p_code: code, p_ip_hash: ip_hash,
+          p_guests: guests, p_message: message, p_code: code, p_ip_hash: ip_hash, p_answers: answers,
         });
         if (!error) {
           const row = Array.isArray(data) ? data[0] : data;

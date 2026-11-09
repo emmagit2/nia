@@ -32,7 +32,7 @@ export default function QrStudio({ lastDesign = null }: { lastDesign?: string | 
       if (c.status === "fulfilled" && Array.isArray(c.value?.campaigns))
         c.value.campaigns.forEach((x: any) => list.push({ key: `c:${x.id}`, label: `Leads: ${x.business_name}`, url: `${origin}/c/${x.slug}`, caption: "Scan to get a quote" }));
       if (e.status === "fulfilled" && Array.isArray(e.value?.events))
-        e.value.events.forEach((x: any) => list.push({ key: `e:${x.id}`, label: `Event: ${x.title}`, url: `${origin}/e/${x.slug}`, caption: "Scan to register" }));
+        e.value.events.forEach((x: any) => list.push({ key: `e:${x.id}`, label: `Event: ${x.title}`, url: `${origin}/e/${x.slug}${x.visibility === "private" && x.access_code ? `?code=${x.access_code}` : ""}`, caption: "Scan to register" }));
       if (b.status === "fulfilled" && Array.isArray(b.value?.pages))
         b.value.pages.forEach((x: any) => list.push({ key: `b:${x.id}`, label: `Booking: ${x.business_name}`, url: `${origin}/b/${x.slug}`, caption: "Scan to book" }));
       setItems(list);

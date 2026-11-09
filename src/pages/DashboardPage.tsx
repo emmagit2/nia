@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type ComponentType, type CSSProperties, type DragEvent, type ReactNode } from "react";
-import { useUser as useClerkUser, UserButton } from "@clerk/clerk-react";
-import type { RecentImage } from "../components/ImagePicker";
+import { useUser as useClerkUser, useAuth, UserButton } from "@clerk/clerk-react";
+import { fitUpload, type RecentImage } from "../components/ImagePicker";
 import { Link } from "react-router-dom";
-import {
+import { renderToStaticMarkup } from "react-dom/server";
+import AIDesigner, { MAX_REFERENCES, type DesignPayload, type DesignTypeName, type Reference } from "../components/AIDesigner";
+import { stampLogo } from "../lib/stampLogo"; 
+ import {
   Zap,
   Download,
   RotateCcw,
@@ -117,6 +120,25 @@ const STYLES = `
 .og-pill{ flex-shrink:0; display:flex; align-items:center; gap:.45rem; padding:.5rem .9rem; border-radius:999px; border:1px solid var(--border); background:var(--surface); color:var(--muted); font-size:.85rem; font-weight:500; }
 .og-pill[aria-current="page"]{ background:var(--accent); border-color:var(--accent); color:#1B1500; font-weight:700; }
 
+
+/* Prompt composer */
+.og-composer{ background:var(--input); border:1px solid var(--border); border-radius:22px; transition:border-color .2s, box-shadow .2s, background-color .2s; }
+.og-composer:focus-within{ border-color:var(--accent); box-shadow:0 0 0 4px var(--ring); }
+.og-composer[data-drag="true"]{ border-color:var(--accent); background:var(--soft); }
+.og-composer textarea{ width:100%; background:transparent; border:0; outline:none; resize:none; color:var(--text); font-size:.92rem; line-height:1.55; padding:.95rem 1.05rem .35rem; }
+.og-composer textarea::placeholder{ color:var(--faint); }
+.og-attach{ position:relative; width:68px; height:68px; border-radius:16px; overflow:hidden; border:1px solid var(--border); flex-shrink:0; background:var(--surface-2); }
+.og-attach-x{ position:absolute; top:4px; right:4px; width:20px; height:20px; border-radius:999px; background:rgba(0,0,0,.7); color:#fff; display:grid; place-items:center; }
+.og-attach-x:hover{ background:#000; }
+.og-tool-btn{ display:inline-flex; align-items:center; gap:.4rem; height:36px; padding:0 .7rem; border-radius:12px; color:var(--muted); font-size:.8rem; font-weight:600; border:1px solid transparent; }
+.og-tool-btn:hover:not(:disabled){ background:var(--surface-2); color:var(--text); }
+.og-tool-btn[data-on="true"]{ background:var(--soft); color:var(--accent-text); border-color:var(--accent); }
+.og-tool-btn:disabled{ opacity:.4; cursor:not-allowed; }
+.og-thumb{ width:88px; flex-shrink:0; text-align:left; }
+.og-thumb-img{ aspect-ratio:1; border-radius:14px; overflow:hidden; border:2px solid var(--border); transition:border-color .2s, transform .2s; }
+.og-thumb:hover .og-thumb-img{ transform:translateY(-2px); border-color:var(--accent); }
+.og-thumb[aria-pressed="true"] .og-thumb-img{ border-color:var(--accent); box-shadow:0 0 0 3px var(--ring); }
+
 /* Tool + template cards */
 .og-lift{ transition:transform .2s, border-color .2s, box-shadow .2s; }
 .og-lift:hover{ transform:translateY(-3px); border-color:var(--accent); }
@@ -164,7 +186,7 @@ interface Tool {
 const TOOLS: Tool[] = [
   { id: "design", label: "AI Designer", blurb: "Logos, flyers, social posts and business cards", icon: Sparkles, cost: 1, group: "Create" },
   { id: "studio", label: "Image Studio", blurb: "Describe, upscale, resize, split text from a design, or turn it into SVG", icon: Wand2, cost: 0, group: "Image tools", note: "Free and 1 to 2 credits", short: "1-2" },
-  { id: "bgRemove", label: "Background Removal", blurb: "Cut out the subject and get a transparent PNG", icon: Eraser, cost: 1, group: "Image tools" },
+  { id: "bgRemove", label: "Background Removal", blurb: "Cut out the subject and get a transparent PNG", icon: Eraser, cost: 0, group: "Image tools" },
   { id: "certificate", label: "Certificate Correction", blurb: "Fix names, dates, spelling and layout on a certificate", icon: Award, cost: 2, group: "Fix and clean up" },
   { id: "pdfFix", label: "PDF Design Correction", blurb: "Clean up the look of a PDF page or design", icon: FileCheck2, cost: 2, group: "Fix and clean up" },
   { id: "pdfToImage", label: "PDF to Image", blurb: "Turn every PDF page into a PNG", icon: FileImage, cost: 0, group: "PDF and documents" },
@@ -185,16 +207,12 @@ const STUDIO_LABELS: Record<StudioToolId, string> = {
 
 const toolBadge = (t: Tool) => t.note ?? (t.cost === 0 ? "Free" : `${t.cost} ${t.cost === 1 ? "credit" : "credits"}`);
 const sideLabel = (t: Tool) => t.short ?? (t.cost === 0 ? "Free" : String(t.cost));
-
-type DesignType = "Logo" | "Flyer" | "Social Post" | "Business Card";
+ 
+type DesignType = DesignTypeName; // now includes Poster, Story, Custom and the rest
+// Only used for the template gallery filter chips
 const DESIGN_TYPES: DesignType[] = ["Logo", "Flyer", "Social Post", "Business Card"];
 
-const PLACEHOLDERS: Record<DesignType, string> = {
-  Logo: "e.g: Modern minimalist logo for my tech startup, blue and gold, clean design",
-  Flyer: "e.g: Grand opening promo for my barbershop, Lagos style, gold and black colors",
-  "Social Post": "e.g: Instagram promo post for my restaurant special offer, Friday night vibes",
-  "Business Card": "e.g: Professional business card for civil engineer, corporate style, navy blue",
-};
+ 
 
 const FIX_CHIPS: Record<"certificate" | "pdfFix", string[]> = {
   certificate: ["Correct the spelling of the name", "Change the date", "Fix alignment and spacing", "Make the text sharper", "Remove stains and marks"],
@@ -292,6 +310,33 @@ function TemplateArt({ t }: { t: Template }) {
           </g>
         </svg>
       );
+  }
+}
+
+async function templateToFile(t: Template): Promise<File> {
+  if (t.image) {
+    const blob = await (await fetch(t.image)).blob();
+    return new File([blob], `${t.id}.png`, { type: blob.type || "image/png" });
+  }
+  const markup = renderToStaticMarkup(<TemplateArt t={t} />).replace(
+    "<svg",
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"'
+  );
+  const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 1024;
+    canvas.getContext("2d")!.drawImage(img, 0, 0, 1024, 1024);
+    const blob = await new Promise<Blob>((res, rej) =>
+      canvas.toBlob((b) => (b ? res(b) : rej(new Error("png failed"))), "image/png")
+    );
+    return new File([blob], `${t.id}.png`, { type: "image/png" });
+  } finally {
+    URL.revokeObjectURL(url);
   }
 }
 
@@ -538,6 +583,7 @@ function ThemeSwitch({ theme, onToggle }: { theme: "dark" | "light"; onToggle: (
   );
 }
 
+
 function CreditsCard({ credits }: { credits: number }) {
   const low = credits < 10;
   return (
@@ -558,46 +604,51 @@ function CreditsCard({ credits }: { credits: number }) {
   );
 }
 
-function TemplateGallery({
+ function TemplateGallery({
   onPick,
-  activeId,
+  activeIds,
   filter,
 }: {
   onPick: (t: Template) => void;
-  activeId?: string | null;
+  activeIds: string[];
   filter: DesignType | "All";
 }) {
   const list = filter === "All" ? TEMPLATES : TEMPLATES.filter((t) => t.type === filter);
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 og-stagger">
-      {list.map((t) => (
-        <button
-          key={t.id}
-          onClick={() => onPick(t)}
-          aria-pressed={activeId === t.id}
-          className="og-card og-lift og-focus group text-left overflow-hidden"
-          style={activeId === t.id ? { borderColor: "var(--accent)", boxShadow: "0 0 0 3px var(--ring)" } : undefined}
-        >
-          <div className="aspect-square overflow-hidden relative">
-            <div className="w-full h-full transition-transform duration-300 group-hover:scale-105">
-              <TemplateArt t={t} />
+      {list.map((t) => {
+        const active = activeIds.includes(t.id);
+        return (
+          <button
+            key={t.id}
+            onClick={() => onPick(t)}
+            aria-pressed={active}
+            className="og-card og-lift og-focus group text-left overflow-hidden"
+            style={active ? { borderColor: "var(--accent)", boxShadow: "0 0 0 3px var(--ring)" } : undefined}
+          >
+            <div className="aspect-square overflow-hidden relative">
+              <div className="w-full h-full transition-transform duration-300 group-hover:scale-105">
+                <TemplateArt t={t} />
+              </div>
+              <span className="absolute inset-x-3 bottom-3 og-btn og-btn-sm opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 group-focus-visible:opacity-100 transition-all justify-center">
+                {active ? "Remove template" : "Use this template"}
+              </span>
             </div>
-            <span className="absolute inset-x-3 bottom-3 og-btn og-btn-sm opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 group-focus-visible:opacity-100 transition-all justify-center">
-              Use this template
-            </span>
-          </div>
-          <div className="p-3 flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold og-text truncate">{t.title}</p>
-            <span className="og-badge shrink-0">{t.type}</span>
-          </div>
-        </button>
-      ))}
+            <div className="p-3 flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold og-text truncate">{t.title}</p>
+              <span className="og-badge shrink-0">{t.type}</span>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
- 
+
 export default function DashboardPage() {
+ 
   const { user: clerkUser } = useClerkUser();
+  const { getToken } = useAuth();
   const { dbUser, setDbUser, refreshUser } = useUser();
   const [recent, setRecent] = useState<RecentImage[]>([]);
 
@@ -646,11 +697,51 @@ const addRecent = (url: string, label: string) => {
   const [businessName, setBusinessName] = useState("");
   const [designType, setDesignType] = useState<DesignType>("Logo");
   const [description, setDescription] = useState("");
-  const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
-  const [galleryFilter, setGalleryFilter] = useState<DesignType | "All">("All");
+   const [galleryFilter, setGalleryFilter] = useState<DesignType | "All">("All");
   const [file, setFile] = useState<File | null>(null);
   const [instructions, setInstructions] = useState("");
   const [lastDesign, setLastDesign] = useState<string | null>(null);
+ const [references, setReferences] = useState<Reference[]>([]);
+
+const addReference = (r: Omit<Reference, "id">) =>
+  setReferences((prev) =>
+    prev.length >= MAX_REFERENCES ? prev : [...prev, { ...r, id: `${Date.now()}-${Math.random()}` }]
+  );
+
+const removeReference = (id: string) => {
+  const target = references.find((r) => r.id === id);
+  if (target) URL.revokeObjectURL(target.preview);
+  setReferences((prev) => prev.filter((r) => r.id !== id));
+};
+
+const clearReferences = () => {
+  references.forEach((r) => URL.revokeObjectURL(r.preview));
+  setReferences([]);
+};
+
+/** Tap a template once to attach it, tap again to remove it. */
+const attachTemplate = async (t: Template, overwritePrompt = false) => {
+  const existing = references.find((r) => r.templateId === t.id);
+  if (existing) return removeReference(existing.id);
+  if (references.length >= MAX_REFERENCES) return setError(`You can attach up to ${MAX_REFERENCES} designs. Remove one first.`);
+  try {
+    const f = await templateToFile(t);
+    addReference({ file: f, preview: URL.createObjectURL(f), source: "template", label: t.title, templateId: t.id });
+    if (references.length === 0) setDesignType(t.type);
+    setDescription((d) => (!d.trim() || (overwritePrompt && references.length === 0) ? t.prompt : d));
+    setError(null);
+  } catch {
+    setError("Could not attach this template. Try another one.");
+  }
+};
+
+const attachUpload = (f: File, label?: string) => {
+  if (f.size > 10 * 1024 * 1024) return setError("That image is bigger than 10 MB.");
+  setError(null);
+  addReference({ file: f, preview: URL.createObjectURL(f), source: "upload", label: label ?? f.name });
+};
+ 
+
 
   // outputs
   const [resultImage, setResultImage] = useState<string | null>(null);
@@ -706,12 +797,10 @@ const addRecent = (url: string, label: string) => {
     })),
   ];
 
-  const pickTemplate = (t: Template) => {
-    setActiveTemplate(t.id);
-    setDesignType(t.type);
-    setDescription(t.prompt);
-    if (view !== "design") goTo("design");
-  };
+ const pickTemplate = async (t: Template) => {
+  if (view !== "design") goTo("design");
+  await attachTemplate(t, true);
+};
 
   const setCredits = (n: unknown) => {
     if (dbUser && typeof n === "number") setDbUser({ ...dbUser, credits_left: n });
@@ -757,28 +846,36 @@ const addRecent = (url: string, label: string) => {
 
   /* ------------------------------ actions -------------------------------- */
 
-  const runDesign = async () => {
-    if (creditsLeft < 1) return setShowBuyModal(true);
-    if (!businessName.trim()) return;
-    setLoading(true);
-    clearResults();
-    try {
-      const res = await axios.post("/api/generate", {
-        businessName: businessName.trim(),
-        type: designType,
-        description: description.trim(),
-        clerkId: clerkUser?.id,
-      });
-      setResultImage(res.data.image_url);
-      setLastDesign(res.data.image_url);
-      setCredits(res.data.credits_left);
-    } catch (err) {
-      await handleServerError(err, 1);
-    } finally {
-      setLoading(false);
-    }
-  };
+const runDesign = async (p: DesignPayload) => {
+  if (!(await charge(1))) return; // shows the buy modal if credits are too low
+  setLoading(true);
+  clearResults();
+  try {
+    const form = new FormData();
+    form.append("prompt", p.prompt);
+    form.append("textRule", p.textRule);
+    form.append("aspect", String(p.aspect));
+    for (const f of p.guideFiles) form.append("refs", await fitUpload(f)); // never the logo
 
+    const res = await axios.post<{ image: string }>("/api/ai-designer", form, {
+      headers: { Authorization: `Bearer ${await getToken()}` },
+      timeout: 120000,
+    });
+
+    const finalImage = p.logo ? await stampLogo(res.data.image, p.logo) : res.data.image;
+    setResultImage(finalImage);
+    setLastDesign(finalImage);
+  } catch (err) {
+    await refund(1); // the user does not lose a credit when it fails
+    setError(
+      axios.isAxiosError(err)
+        ? ((err.response?.data as { error?: string } | undefined)?.error ?? "Something went wrong. Try again.")
+        : "Could not finish the design. Try again."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
   const runCorrection = async () => {
     if (!file || !tool || (toolId !== "certificate" && toolId !== "pdfFix")) return;
     if (creditsLeft < tool.cost) return setShowBuyModal(true);
@@ -935,62 +1032,42 @@ const addRecent = (url: string, label: string) => {
             ))}
           </div>
         </div>
-        <TemplateGallery onPick={pickTemplate} activeId={activeTemplate} filter={galleryFilter} />
-      </section>
+        <TemplateGallery
+  onPick={pickTemplate}
+  activeIds={references.map((r) => r.templateId).filter((x): x is string => !!x)}
+  filter={galleryFilter}
+/>
+       </section>
     </div>
   );
 
   const renderForm = () => {
     switch (toolId) {
-      case "design":
-        return (
-          <>
-            <div>
-              <Label>Business name *</Label>
-              <input
-                type="text"
-                className="og-input"
-                placeholder="e.g: Emeka's Barbershop, Lagos Fresh Kitchen"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <Label>Design type</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {DESIGN_TYPES.map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setDesignType(type)}
-                    disabled={loading}
-                    data-active={designType === type}
-                    className="og-chip og-focus !rounded-xl !py-2.5 !text-sm !font-semibold"
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <Label note="(optional but recommended)">Description</Label>
-              <textarea
-                className="og-input resize-none"
-                rows={4}
-                placeholder={PLACEHOLDERS[designType]}
-                value={description}
-                onChange={(e) => {
-                  setDescription(e.target.value);
-                  setActiveTemplate(null);
-                }}
-                disabled={loading}
-              />
-            </div>
-            <Btn icon={Sparkles} onClick={runDesign} loading={loading} loadingText="Oga, AI dey cook..." disabled={!businessName.trim() || needsCredits}>
-              Generate design · 1 credit
-            </Btn>
-          </>
-        );
+       case "design":
+  return (
+    <AIDesigner
+  values={{ businessName, type: designType, description }}
+  onValues={(p) => {
+    if (p.businessName !== undefined) setBusinessName(p.businessName);
+    if (p.type !== undefined) setDesignType(p.type);
+    if (p.description !== undefined) setDescription(p.description);
+  }}
+  loading={loading}
+  creditsLeft={creditsLeft}
+  charge={charge}
+  refund={refund}
+  recent={recent}
+  onGenerate={runDesign}
+  references={references}
+  onUpload={attachUpload}
+  onRemove={removeReference}
+  onClear={clearReferences}
+  templates={TEMPLATES}
+  renderArt={(id) => <TemplateArt t={TEMPLATES.find((x) => x.id === id)!} />}
+  onPickTemplate={(id) => attachTemplate(TEMPLATES.find((x) => x.id === id)!)}
+/>
+  );
+
 
       case "certificate":
       case "pdfFix": {
@@ -1065,7 +1142,7 @@ const addRecent = (url: string, label: string) => {
               loadingText={progress !== null ? `Working ${Math.round(progress * 100)}%` : "Removing background..."}
               disabled={!file || !isImage(file) || needsCredits}
             >
-              Remove background · 1 credit
+              Remove background  
             </Btn>
           </>
         );
@@ -1229,8 +1306,18 @@ const addRecent = (url: string, label: string) => {
         ) : resultImage ? (
           <>
             <div className={isCutout ? "og-checker" : ""}>
-              <img src={resultImage} alt="Result" className={`w-full aspect-square block og-reveal ${isCutout ? "object-contain" : "object-cover"}`} />
-            </div>
+ <img
+  src={resultImage}
+  alt="Result"
+  className={`w-full block og-reveal ${
+    isCutout
+      ? "aspect-square object-contain"
+      : toolId === "design"
+        ? "h-auto max-h-[80vh] object-contain mx-auto"
+        : "aspect-square object-cover"
+  }`}
+/>
+             </div>
             <div className="p-4 flex gap-3 border-t og-divider">
               <div className="flex-1">
                 <Btn icon={Download} onClick={() => downloadUrl(resultImage, `twomindesign_${toolId}_${Date.now()}.${isCutout ? "png" : "jpg"}`)}>
@@ -1287,8 +1374,7 @@ const addRecent = (url: string, label: string) => {
     onUseBrief: (b) => {
       setDesignType(b.type);
       setDescription(b.description);
-      setActiveTemplate(null);
-      goTo("design");
+       goTo("design");
     },
     recent,
     addRecent,
@@ -1384,8 +1470,12 @@ const addRecent = (url: string, label: string) => {
                 ))}
               </div>
             </div>
-            <TemplateGallery onPick={pickTemplate} activeId={activeTemplate} filter={galleryFilter} />
-          </section>
+   <TemplateGallery
+     onPick={pickTemplate}
+     activeIds={references.map((r) => r.templateId).filter((x): x is string => !!x)}
+     filter={galleryFilter}
+   />
+             </section>
         )}
       </div>
     );
