@@ -4,7 +4,8 @@ import { fitUpload, type RecentImage } from "../components/ImagePicker";
 import { Link } from "react-router-dom";
 import { renderToStaticMarkup } from "react-dom/server";
 import AIDesigner, { MAX_REFERENCES, type DesignPayload, type DesignTypeName, type Reference } from "../components/AIDesigner";
-import { stampLogo } from "../lib/stampLogo"; 
+import { stampLogo } from "../lib/stampLogo";
+import { generateDesign } from "../lib/generateDesign"; 
  import {
   Zap,
   Download,
@@ -184,7 +185,7 @@ interface Tool {
 // Change the `cost` values to whatever pricing you want.
 // Image Studio holds five tools as tabs, so the sidebar stays short.
 const TOOLS: Tool[] = [
-  { id: "design", label: "AI Designer", blurb: "Logos, flyers, social posts and business cards", icon: Sparkles, cost: 1, group: "Create" },
+  { id: "design", label: "AI Designer", blurb: "Logos, flyers, social posts and business cards", icon: Sparkles, cost: 0, group: "Create" },
   { id: "studio", label: "Image Studio", blurb: "Describe, upscale, resize, split text from a design, or turn it into SVG", icon: Wand2, cost: 0, group: "Image tools", note: "Free and 1 to 2 credits", short: "1-2" },
   { id: "bgRemove", label: "Background Removal", blurb: "Cut out the subject and get a transparent PNG", icon: Eraser, cost: 0, group: "Image tools" },
   { id: "certificate", label: "Certificate Correction", blurb: "Fix names, dates, spelling and layout on a certificate", icon: Award, cost: 2, group: "Fix and clean up" },
@@ -845,37 +846,37 @@ const attachUpload = (f: File, label?: string) => {
   };
 
   /* ------------------------------ actions -------------------------------- */
-
+ 
 const runDesign = async (p: DesignPayload) => {
-  if (!(await charge(1))) return; // shows the buy modal if credits are too low
   setLoading(true);
   clearResults();
   try {
     const form = new FormData();
     form.append("prompt", p.prompt);
+    form.append("userWords", description);
     form.append("textRule", p.textRule);
     form.append("aspect", String(p.aspect));
     for (const f of p.guideFiles) form.append("refs", await fitUpload(f)); // never the logo
 
-    const res = await axios.post<{ image: string }>("/api/ai-designer", form, {
-      headers: { Authorization: `Bearer ${await getToken()}` },
-      timeout: 120000,
-    });
+    // starts the background job, then checks every 2.5 s until the image is ready
+    const { image } = await generateDesign(form, getToken);
 
-    const finalImage = p.logo ? await stampLogo(res.data.image, p.logo) : res.data.image;
+    const finalImage = p.logo ? await stampLogo(image, p.logo) : image;
     setResultImage(finalImage);
     setLastDesign(finalImage);
   } catch (err) {
-    await refund(1); // the user does not lose a credit when it fails
     setError(
       axios.isAxiosError(err)
         ? ((err.response?.data as { error?: string } | undefined)?.error ?? "Something went wrong. Try again.")
-        : "Could not finish the design. Try again."
+        : err instanceof Error && err.message
+          ? err.message
+          : "Could not finish the design. Please try again."
     );
   } finally {
     setLoading(false);
   }
 };
+ 
   const runCorrection = async () => {
     if (!file || !tool || (toolId !== "certificate" && toolId !== "pdfFix")) return;
     if (creditsLeft < tool.cost) return setShowBuyModal(true);
@@ -1320,9 +1321,9 @@ const runDesign = async (p: DesignPayload) => {
              </div>
             <div className="p-4 flex gap-3 border-t og-divider">
               <div className="flex-1">
-                <Btn icon={Download} onClick={() => downloadUrl(resultImage, `twomindesign_${toolId}_${Date.now()}.${isCutout ? "png" : "jpg"}`)}>
-                  Download
-                </Btn>
+               <Btn icon={Download} onClick={() => downloadUrl(resultImage, `twomindesign_${toolId}_${Date.now()}.png`)}>
+  Download
+</Btn>
               </div>
               <button onClick={clearResults} aria-label="Start over" className="og-ghost" style={{ padding: "0 1rem", borderRadius: 16 }}>
                 <RotateCcw size={16} />

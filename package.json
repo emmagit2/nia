@@ -14,6 +14,7 @@
     "@clerk/clerk-react": "^5.61.11",
     "@google/genai": "^3.0.0",
     "@imgly/background-removal": "^1.7.0",
+    "@netlify/blobs": "^11.1.9",
     "@netlify/functions": "^6.1.0",
     "@supabase/supabase-js": "^2.119.0",
     "axios": "^1.21.0",

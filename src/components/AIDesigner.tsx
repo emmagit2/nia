@@ -600,8 +600,7 @@ export default function AIDesigner({
       .join(" ");
   };
 
-  const canGo = !!businessName.trim() && (!!description.trim() || hasGuides) && creditsLeft >= 1 && !describing;
-
+const canGo = !!businessName.trim() && (!!description.trim() || hasGuides) && !describing;
   const generate = () =>
     onGenerate({
       businessName: businessName.trim(),
