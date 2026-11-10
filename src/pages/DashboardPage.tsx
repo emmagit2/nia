@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import AIDesigner, { MAX_REFERENCES, type DesignPayload, type DesignTypeName, type Reference } from "../components/AIDesigner";
 import { stampLogo } from "../lib/stampLogo";
 import { generateDesign } from "../lib/generateDesign"; 
+import PosterStudio from "../components/PosterStudio";
  import {
   Zap,
   Download,
@@ -31,6 +32,7 @@ import { generateDesign } from "../lib/generateDesign";
   Wand2,
   CalendarDays,
   CalendarClock,
+  LayoutGrid,
 } from "lucide-react";
 import axios from "axios";
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -165,8 +167,8 @@ const STYLES = `
 /*  Tool configuration                                                        */
 /* -------------------------------------------------------------------------- */
 
-  type ToolId = "design" | "certificate" | "pdfFix" | "bgRemove" | "pdfToImage" | "pdfToText" | "editor" | "leads" | "events" | "booking" | "studio";
- type View = "home" | ToolId;
+type ToolId = "design" | "certificate" | "pdfFix" | "bgRemove" | "pdfToImage" | "pdfToText" | "editor" | "leads" | "events" | "booking" | "studio" | "poster"; 
+type View = "home" | ToolId;
 type IconType = ComponentType<{ size?: number; className?: string }>;
 
 interface Tool {
@@ -196,6 +198,7 @@ const TOOLS: Tool[] = [
   { id: "leads", label: "Client Leads", blurb: "Put a QR on your design and collect customers who are interested", icon: QrCode, cost: 0, group: "Grow" },
   { id: "events", label: "Event Registration", blurb: "Create a QR for your wedding, party or program so guests can register", icon: CalendarDays, cost: 0, group: "Grow" },
   { id: "booking", label: "Bookings", blurb: "Create a QR so customers can pick a day and time to book you", icon: CalendarClock, cost: 0, group: "Grow" },
+  { id: "poster", label: "Poster Studio", blurb: "Type one sentence and get an editable poster", icon: LayoutGrid, cost: 0, group: "Create" },
 ];
 const GROUPS = ["Create", "Image tools", "Grow", "Fix and clean up", "PDF and documents"];
 const STUDIO_LABELS: Record<StudioToolId, string> = {
@@ -1337,8 +1340,20 @@ const runDesign = async (p: DesignPayload) => {
     );
   };
 
-  const renderTool = () => {
+    const renderTool = () => {
     if (!tool) return null;
+
+    if (toolId === "poster") {
+      return (
+        <div className="flex flex-col gap-8 og-in">
+          <div>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold og-text">{tool.label}</h1>
+            <p className="og-muted text-sm mt-1">{tool.blurb}.</p>
+          </div>
+          <PosterStudio charge={charge} refund={refund} />
+        </div>
+      );
+    }
 
     if (toolId === "studio") {
       return (
@@ -1366,21 +1381,21 @@ const runDesign = async (p: DesignPayload) => {
 
           {/* key resets a tool when you switch tabs; remove it if you want each tab to keep its upload */}
           <ImageStudio
-  key={studioTool}
-  tool={studioTool}
-  ctx={{
-    creditsLeft,
-    charge,
-    refund,
-    onUseBrief: (b) => {
-      setDesignType(b.type);
-      setDescription(b.description);
-       goTo("design");
-    },
-    recent,
-    addRecent,
-  }}
-/>
+            key={studioTool}
+            tool={studioTool}
+            ctx={{
+              creditsLeft,
+              charge,
+              refund,
+              onUseBrief: (b) => {
+                setDesignType(b.type);
+                setDescription(b.description);
+                goTo("design");
+              },
+              recent,
+              addRecent,
+            }}
+          />
         </div>
       );
     }
@@ -1397,7 +1412,7 @@ const runDesign = async (p: DesignPayload) => {
       );
     }
 
-        if (toolId === "events") {
+    if (toolId === "events") {
       return (
         <div className="flex flex-col gap-8 og-in">
           <div>
@@ -1471,12 +1486,12 @@ const runDesign = async (p: DesignPayload) => {
                 ))}
               </div>
             </div>
-   <TemplateGallery
-     onPick={pickTemplate}
-     activeIds={references.map((r) => r.templateId).filter((x): x is string => !!x)}
-     filter={galleryFilter}
-   />
-             </section>
+            <TemplateGallery
+              onPick={pickTemplate}
+              activeIds={references.map((r) => r.templateId).filter((x): x is string => !!x)}
+              filter={galleryFilter}
+            />
+          </section>
         )}
       </div>
     );
